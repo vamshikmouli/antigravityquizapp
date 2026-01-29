@@ -3,8 +3,9 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
+  base: '/play',
   server: {
     port: 5173,
-    host: true // Allow access from network
+    host: true
   }
 })

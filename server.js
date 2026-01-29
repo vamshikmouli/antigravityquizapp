@@ -3,7 +3,12 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { PrismaClient } from '@prisma/client';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Import controllers
 import * as sessionController from './controllers/sessionController.js';
@@ -629,6 +634,25 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
       });
     }
   });
+});
+
+// ============================================================================
+// SERVE FRONTEND ASSETS
+// ============================================================================
+
+// Serve Student Play screen at /play
+app.use('/play', express.static(path.join(__dirname, 'client-mobile/dist')));
+app.get('/play/*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'client-mobile/dist/index.html'));
+});
+
+// Serve Admin/TV Dashboard at root /
+app.use('/', express.static(path.join(__dirname, 'client-tv/dist')));
+app.get('/*', (req, res) => {
+  // Only serve index.html if it's not an API route
+  if (!req.path.startsWith('/api')) {
+    res.sendFile(path.join(__dirname, 'client-tv/dist/index.html'));
+  }
 });
 
 // ============================================================================
