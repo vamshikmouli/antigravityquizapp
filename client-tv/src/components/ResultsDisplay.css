@@ -1,0 +1,225 @@
+.results-display-tv {
+  min-height: 100vh;
+  padding: var(--spacing-xl);
+}
+
+.loading-analytics {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xl);
+  min-height: 100vh;
+}
+
+.results-header-tv {
+  text-align: center;
+  margin-bottom: var(--spacing-2xl);
+}
+
+.results-header-tv h1 {
+  margin-bottom: var(--spacing-lg);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.session-stats {
+  display: flex;
+  gap: var(--spacing-lg);
+  justify-content: center;
+  margin-top: var(--spacing-lg);
+}
+
+.stat-box-tv {
+  background: var(--color-bg-secondary);
+  padding: var(--spacing-lg) var(--spacing-xl);
+  border-radius: var(--radius-md);
+  text-align: center;
+  min-width: 200px;
+}
+
+.stat-icon-tv {
+  font-size: 48px;
+  margin-bottom: var(--spacing-sm);
+}
+
+.stat-value-tv {
+  font-size: 48px;
+  font-weight: 700;
+  color: var(--color-primary);
+  margin-bottom: var(--spacing-xs);
+}
+
+.stat-label-tv {
+  font-size: 20px;
+  color: var(--color-text-secondary);
+}
+
+.podium {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: var(--spacing-lg);
+  margin: var(--spacing-2xl) 0;
+  min-height: 400px;
+}
+
+.podium-place {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.podium-place.first {
+  order: 2;
+}
+
+.podium-place.second {
+  order: 1;
+}
+
+.podium-place.third {
+  order: 3;
+}
+
+.crown {
+  font-size: 64px;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.medal {
+  font-size: 80px;
+  margin-bottom: var(--spacing-sm);
+}
+
+.place-name {
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: var(--spacing-xs);
+}
+
+.place-score {
+  font-size: 24px;
+  color: var(--color-success);
+  font-weight: 600;
+  margin-bottom: var(--spacing-md);
+}
+
+.podium-stand {
+  width: 250px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 64px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.first-stand {
+  height: 300px;
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.3), rgba(255, 193, 7, 0.3));
+  border: 4px solid var(--color-buzzer-winner);
+}
+
+.second-stand {
+  height: 240px;
+  background: linear-gradient(135deg, rgba(192, 192, 192, 0.3), rgba(169, 169, 169, 0.3));
+  border: 4px solid #c0c0c0;
+}
+
+.third-stand {
+  height: 180px;
+  background: linear-gradient(135deg, rgba(205, 127, 50, 0.3), rgba(184, 115, 51, 0.3));
+  border: 4px solid #cd7f32;
+}
+
+.rest-of-top {
+  max-width: 1200px;
+  margin: var(--spacing-2xl) auto;
+}
+
+.rest-of-top h3 {
+  text-align: center;
+  margin-bottom: var(--spacing-lg);
+  color: var(--color-text-secondary);
+  font-size: 28px;
+}
+
+.top-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: var(--spacing-md);
+}
+
+.top-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-md);
+  animation: slideInRight var(--transition-normal);
+}
+
+.top-rank {
+  width: 50px;
+  text-align: center;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.top-name {
+  flex: 1;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.top-score {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--color-success);
+}
+
+.buzzer-stats-tv {
+  max-width: 1200px;
+  margin: var(--spacing-2xl) auto;
+  padding: var(--spacing-xl);
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-lg);
+}
+
+.buzzer-stats-tv h3 {
+  text-align: center;
+  margin-bottom: var(--spacing-lg);
+  font-size: 32px;
+}
+
+.buzzer-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--spacing-lg);
+}
+
+.buzzer-stat {
+  text-align: center;
+  padding: var(--spacing-lg);
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-md);
+}
+
+.buzzer-stat-label {
+  font-size: 18px;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-sm);
+}
+
+.buzzer-stat-value {
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--color-buzzer-active);
+}

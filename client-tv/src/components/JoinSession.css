@@ -1,0 +1,118 @@
+.join-session-tv {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #0f0a1e 0%, #1a1429 100%);
+}
+
+.join-content {
+  text-align: center;
+  max-width: 800px;
+  padding: var(--spacing-2xl);
+}
+
+.tv-icon {
+  font-size: 120px;
+  margin-bottom: var(--spacing-lg);
+  animation: pulse 3s ease-in-out infinite;
+}
+
+.subtitle {
+  color: var(--color-text-secondary);
+  font-size: 24px;
+  margin-top: var(--spacing-md);
+  margin-bottom: var(--spacing-2xl);
+}
+
+.join-form-tv {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+  margin-top: var(--spacing-xl);
+}
+
+.code-input-tv {
+  font-size: 56px;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 8px;
+  padding: var(--spacing-lg);
+  background: var(--color-bg-secondary);
+  border: 4px solid rgba(99, 102, 241, 0.3);
+  border-radius: var(--radius-lg);
+  color: var(--color-text);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.code-input-tv:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 40px rgba(99, 102, 241, 0.3);
+}
+
+.error-message-tv {
+  background: rgba(239, 68, 68, 0.2);
+  border: 2px solid var(--color-error);
+  color: var(--color-error);
+  padding: var(--spacing-lg);
+  border-radius: var(--radius-md);
+  font-size: 20px;
+  animation: fadeIn var(--transition-normal);
+}
+
+.join-button-tv {
+  font-size: 28px;
+  padding: var(--spacing-lg) var(--spacing-xl);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  min-height: 80px;
+}
+
+.join-button-tv:hover:not(:disabled) {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+}
+
+.join-button-tv:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.join-footer-tv {
+  margin-top: var(--spacing-2xl);
+  color: var(--color-text-secondary);
+  font-size: 18px;
+}
+
+@media (max-width: 768px) {
+  .join-content {
+    padding: var(--spacing-md);
+    width: 100%;
+  }
+
+  .tv-icon {
+    font-size: 80px;
+  }
+
+  .subtitle {
+    font-size: 18px;
+  }
+
+  .code-input-tv {
+    font-size: 32px;
+    letter-spacing: 4px;
+    padding: var(--spacing-md);
+  }
+
+  .join-button-tv {
+    font-size: 20px;
+    padding: var(--spacing-md);
+    min-height: 60px;
+  }
+}

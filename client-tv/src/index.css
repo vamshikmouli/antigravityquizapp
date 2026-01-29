@@ -1,0 +1,324 @@
+/* ============================================================================
+   TV DISPLAY - LARGE SCREEN OPTIMIZED STYLES
+   ============================================================================ */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  /* Colors */
+  --color-bg: #0f0a1e;
+  --color-bg-secondary: #1a1429;
+  --color-primary: #6366f1;
+  --color-secondary: #8b5cf6;
+  --color-accent: #ec4899;
+  
+  --color-success: #10b981;
+  --color-error: #ef4444;
+  --color-warning: #f59e0b;
+  --color-info: #3b82f6;
+  
+  --color-buzzer-active: #ff6b35;
+  --color-buzzer-winner: #ffd700;
+  
+  --color-option-a: #f97316;
+  --color-option-b: #3b82f6;
+  --color-option-c: #10b981;
+  --color-option-d: #8b5cf6;
+  
+  --color-text: #ffffff;
+  --color-text-secondary: #a1a1aa;
+  
+  /* Spacing for large screens */
+  --spacing-xs: 8px;
+  --spacing-sm: 16px;
+  --spacing-md: 24px;
+  --spacing-lg: 32px;
+  --spacing-xl: 48px;
+  --spacing-2xl: 64px;
+  
+  /* Border Radius */
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-full: 9999px;
+  
+  /* Shadows */
+  --shadow-sm: 0 4px 16px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 16px 64px rgba(0, 0, 0, 0.5);
+  
+  /* Transitions */
+  --transition-fast: 200ms ease;
+  --transition-normal: 300ms ease;
+  --transition-slow: 500ms ease;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--color-bg);
+  color: var(--color-text);
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* ============================================================================
+   TYPOGRAPHY - LARGE SCREEN
+   ============================================================================ */
+
+h1 { font-size: 64px; font-weight: 700; line-height: 1.1; }
+h2 { font-size: 48px; font-weight: 700; line-height: 1.2; }
+h3 { font-size: 36px; font-weight: 600; line-height: 1.3; }
+h4 { font-size: 28px; font-weight: 600; line-height: 1.4; }
+h5 { font-size: 24px; font-weight: 600; line-height: 1.4; }
+h6 { font-size: 20px; font-weight: 600; line-height: 1.4; }
+
+p {
+  line-height: 1.6;
+  font-size: 20px;
+}
+
+/* ============================================================================
+   LAYOUT
+   ============================================================================ */
+
+.tv-container {
+  width: 100vw;
+  height: 100vh;
+  padding: var(--spacing-lg);
+  display: flex;
+  flex-direction: column;
+}
+
+.tv-grid {
+  display: grid;
+  grid-template-columns: 1fr 400px;
+  gap: var(--spacing-lg);
+  height: 100%;
+}
+
+.main-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+/* ============================================================================
+   CARDS & PANELS
+   ============================================================================ */
+
+.card {
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.card-glass {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.card-gradient {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1));
+  border: 2px solid rgba(99, 102, 241, 0.3);
+}
+
+/* ============================================================================
+   ANIMATIONS
+   ============================================================================ */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(50px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-50px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.9;
+  }
+}
+
+@keyframes glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(255, 215, 0, 0.8);
+  }
+}
+
+@keyframes countdown {
+  from {
+    width: 100%;
+    background: var(--color-success);
+  }
+  50% {
+    background: var(--color-warning);
+  }
+  to {
+    width: 0%;
+    background: var(--color-error);
+  }
+}
+
+.fade-in {
+  animation: fadeIn var(--transition-normal);
+}
+
+.slide-in-right {
+  animation: slideInRight var(--transition-normal);
+}
+
+.slide-in-left {
+  animation: slideInLeft var(--transition-normal);
+}
+
+/* ============================================================================
+   UTILITIES
+   ============================================================================ */
+
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.justify-center {
+  justify-content: center;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.gap-sm { gap: var(--spacing-sm); }
+.gap-md { gap: var(--spacing-md); }
+.gap-lg { gap: var(--spacing-lg); }
+
+.text-center {
+  text-align: center;
+}
+
+.mt-md { margin-top: var(--spacing-md); }
+.mt-lg { margin-top: var(--spacing-lg); }
+.mb-md { margin-bottom: var(--spacing-md); }
+.mb-lg { margin-bottom: var(--spacing-lg); }
+
+/* ============================================================================
+   STATUS INDICATORS
+   ============================================================================ */
+
+.status-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-dot.connected {
+  background: var(--color-success);
+  box-shadow: 0 0 12px var(--color-success);
+}
+
+.status-dot.disconnected {
+  background: var(--color-error);
+}
+
+/* ============================================================================
+   LOADING SPINNER
+   ============================================================================ */
+
+.spinner {
+  width: 60px;
+  height: 60px;
+  border: 6px solid rgba(255, 255, 255, 0.1);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ============================================================================
+   RESPONSIVE (for smaller displays)
+   ============================================================================ */
+
+@media (max-width: 1280px) {
+  .tv-grid {
+    grid-template-columns: 1fr 300px;
+  }
+  
+  h1 { font-size: 48px; }
+  h2 { font-size: 36px; }
+  h3 { font-size: 28px; }
+}
+
+@media (max-width: 1024px) {
+  .tv-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+  }
+  
+  .sidebar {
+    flex-direction: row;
+    overflow-x: auto;
+  }
+}

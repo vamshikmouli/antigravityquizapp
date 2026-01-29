@@ -1,0 +1,27 @@
+HOW TO START YOUR QUIZ APP
+
+1. START THE SERVICES
+   Since you already have them running, you can skip this.
+   In the future, double-click 'start-app.ps1' or run:
+   > .\start-app.ps1
+
+2. CREATE A QUIZ SESSION
+   Run this command in PowerShell to get a new code:
+   > .\create-session.ps1
+   (Copy the code, e.g., "ABC-123")
+
+3. CONNECT THE TV (HOST)
+   - Go to: http://localhost:5174
+   - Enter Code: [Your Code]
+   - CHECK THE BOX: [x] Join as Host (Control Quiz)
+   - Click "Connect"
+
+4. CONNECT STUDENTS
+   - Go to: http://localhost:5173
+   - Enter Code: [Your Code]
+   - Enter Name
+   - Click "Join"
+
+5. PLAY!
+   - On the TV screen, click "▶ START QUIZ"
+   - Use the TV controls to go to the Next Question or End Quiz.

@@ -1,0 +1,126 @@
+.final-results-display {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-gradient);
+  z-index: 3000;
+  color: white;
+  overflow-y: auto;
+  font-family: 'Inter', sans-serif;
+}
+
+.results-overlay {
+  max-width: 1800px;
+  margin: 0 auto;
+  padding: 80px 40px;
+}
+
+.results-header {
+  text-align: center;
+  margin-bottom: 80px;
+}
+
+.results-header h1 {
+  font-size: 6rem;
+  margin: 0 0 30px 0;
+  text-transform: uppercase;
+  letter-spacing: 5px;
+  color: #FFD93D;
+  text-shadow: 0 5px 30px rgba(0,0,0,0.5);
+}
+
+.stat-pills {
+  display: flex;
+  justify-content: center;
+  gap: 30px;
+}
+
+.stat-pill {
+  background: rgba(0,0,0,0.4);
+  padding: 15px 40px;
+  border-radius: 50px;
+  font-size: 2rem;
+  font-weight: 700;
+  border: 2px solid rgba(255,255,255,0.1);
+}
+
+.results-content {
+  display: flex;
+  flex-direction: column;
+  gap: 100px;
+}
+
+/* Podium Styles */
+.podium-section {
+  padding: 40px 0;
+  display: flex;
+  justify-content: center;
+}
+
+.podium {
+  display: flex;
+  align-items: flex-end;
+  gap: 40px;
+  height: 600px;
+}
+
+.podium-place {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 350px;
+  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.podium-place:hover {
+  transform: translateY(-20px);
+}
+
+.avatar {
+  font-size: 150px;
+  margin-bottom: 20px;
+}
+
+.podium-name {
+  font-size: 48px;
+  font-weight: 900;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+.podium-score {
+  font-size: 64px;
+  font-weight: 900;
+  color: #6bcf72;
+  margin-bottom: 30px;
+}
+
+.bar {
+  width: 100%;
+  border-radius: 20px 20px 0 0;
+  background: rgba(255,255,255,0.1);
+  box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+}
+
+.first .bar { height: 350px; background: linear-gradient(180deg, #FFD700 0%, #B8860B 100%); }
+.second .bar { height: 250px; background: linear-gradient(180deg, #C0C0C0 0%, #808080 100%); }
+.third .bar { height: 180px; background: linear-gradient(180deg, #CD7F32 0%, #8B4513 100%); }
+
+.first .podium-score { color: #FFD700; }
+.second .podium-score { color: #C0C0C0; }
+.third .podium-score { color: #CD7F32; }
+
+/* Table Section */
+.table-section h2 {
+  font-size: 4rem;
+  margin-bottom: 50px;
+  text-align: center;
+  color: #FFD93D;
+}
+
+.results-footer {
+  margin-top: 100px;
+  text-align: center;
+  padding-bottom: 100px;
+  opacity: 0.5;
+  font-size: 2rem;
+}
