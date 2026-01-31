@@ -7,8 +7,8 @@
   "scripts": {
     "dev": "node --watch server.js",
     "start": "node server.js",
-    "build:tv": "cd client-tv && npm install && npm run build",
-    "build:mobile": "cd client-mobile && npm install && npm run build",
+    "build:tv": "cd client-tv && npm install --include=dev && npm run build",
+    "build:mobile": "cd client-mobile && npm install --include=dev && npm run build",
     "build:all": "npm run build:tv && npm run build:mobile",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",

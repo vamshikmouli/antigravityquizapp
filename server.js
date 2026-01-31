@@ -32,9 +32,7 @@ const httpServer = createServer(app);
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
-  'https://admin.jnanaquiz.in',
-  'https://play.jnanaquiz.in',
-  'https://antigravityquizapp-production.up.railway.app',
+  'https://jnanaquizapp.onrender.com',
   process.env.FRONTEND_URL
 ].filter(Boolean);
 
