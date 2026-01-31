@@ -4,47 +4,41 @@ import { useNavigate, Link } from 'react-router-dom';
 import './QuestionManager.css';
 
 function CreateSessionPage() {
-  const { token, user } = useAuth();
+  const { token } = useAuth();
   const navigate = useNavigate();
-  const [questions, setQuestions] = useState([]);
-  const [selectedIds, setSelectedIds] = useState([]);
+  const [quizzes, setQuizzes] = useState([]);
+  const [selectedQuizId, setSelectedQuizId] = useState(null);
   const [loading, setLoading] = useState(true);
   
   useEffect(() => {
-    const fetchQuestions = async () => {
+    const fetchQuizzes = async () => {
       try {
-        const res = await fetch('/api/questions', {
+        const res = await fetch('/api/quizzes', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();
-        setQuestions(data);
+        setQuizzes(data);
+        if (data.length > 0) setSelectedQuizId(data[0].id);
       } catch (err) {
         console.error(err);
       } finally {
         setLoading(false);
       }
     };
-    fetchQuestions();
+    fetchQuizzes();
   }, [token]);
 
-  const toggleSelection = (id) => {
-    setSelectedIds(prev => 
-      prev.includes(id) ? prev.filter(qId => qId !== id) : [...prev, id]
-    );
-  };
-
   const handleStartSession = async () => {
-    if (selectedIds.length === 0) return alert('Select at least one question');
+    if (!selectedQuizId) return alert('Please select a quiz');
 
     try {
-      const res = await fetch('/api/sessions', {
+      const res = await fetch(`/api/sessions/quiz/${selectedQuizId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          questionIds: selectedIds,
           settings: {
             musicEnabled: true,
             showLiveResults: true
@@ -53,75 +47,114 @@ function CreateSessionPage() {
       });
 
       const session = await res.json();
-      // Navigate to Lobby with session data
-      // We need to pass role='host' to prompt appropriate UI
-      // But App.jsx handles routing based on socket events usually.
-      // We should probably just navigate to '/' and let JoinSession auto-join or similar?
-      // Actually, Host needs to join the socket room.
-      // So we will navigate to a special route or trigger socket join here? 
-      // Existing App.jsx uses 'join-session' socket emit.
-      // Let's redirect to a "HostLobby" route that handles this, or simply back to Home and auto-fill?
-      // Better: Redirect to /lobby with state
-      
-      // Since App.jsx is structured around 'sessionCode' state, we might need to rely on the user entering the code 
-      // OR we can update the implementation to allow direct navigation.
-      
-      // For now, let's redirect to the Join screen and maybe auto-fill if possible, 
-      // OR better, we simply show the code and ask them to Connect. 
-      // Wait, the host IS the TV app.
-      // So we should navigate to /host-connect/${session.code} ?
-      
-      // Let's just go to a success screen or reuse JoinSession
-      navigate('/lobby-connect', { state: { code: session.code, isHost: true } });
-      
+      if (res.ok) {
+        navigate('/lobby-connect', { state: { code: session.code, isHost: true } });
+      } else {
+        alert(session.error || 'Failed to start session');
+      }
     } catch (err) {
       console.error(err);
       alert('Failed to start session');
     }
   };
 
-  // Group questions by round
-  const questionsByRound = questions.reduce((acc, q) => {
-    if (!acc[q.round]) acc[q.round] = [];
-    acc[q.round].push(q);
-    return acc;
-  }, {});
+  const selectedQuiz = quizzes.find(q => q.id === selectedQuizId);
 
   return (
-    <div className="dashboard-container">
+    <div className="dashboard-container fade-in">
       <header className="dashboard-header">
-        <h1>Create New Session</h1>
-        <Link to="/" className="back-link">Cancel</Link>
+        <h1>Launch a Quiz</h1>
+        <Link to="/dashboard" className="back-link">Cancel</Link>
       </header>
 
       <div className="session-wizard">
         <div className="wizard-step">
-          <h2>Select Questions</h2>
-          <p>Choose questions to include in this quiz session.</p>
+          <h2>Select Quiz Set</h2>
+          <p>Choose the quiz you want to launch on the big screen.</p>
           
-          <div className="questions-selection-list">
-            {Object.keys(questionsByRound).sort((a,b)=>a-b).map(round => (
-              <div key={round} className="round-group">
-                <h3>Round {round}</h3>
-                {questionsByRound[round].map(q => (
-                  <div key={q.id} className={`selection-item ${selectedIds.includes(q.id) ? 'selected' : ''}`} onClick={() => toggleSelection(q.id)}>
-                    <div className="selection-checkbox"></div>
-                    <div className="selection-info">
-                      <span className="type-badge">{q.type.replace('_', ' ')}</span>
-                      <div className="selection-text">{q.text}</div>
-                    </div>
+          <div className="quizzes-selection-grid" style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', 
+            gap: '20px', 
+            marginTop: '30px' 
+          }}>
+            {quizzes.map(quiz => (
+              <div 
+                key={quiz.id} 
+                className={`card-glass quiz-select-card ${selectedQuizId === quiz.id ? 'selected' : ''}`} 
+                onClick={() => setSelectedQuizId(quiz.id)}
+                style={{
+                  padding: '30px',
+                  borderRadius: '24px',
+                  border: selectedQuizId === quiz.id ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
+                  background: selectedQuizId === quiz.id ? 'rgba(99, 102, 241, 0.1)' : 'rgba(255, 255, 255, 0.03)',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease'
+                }}
+              >
+                <h3 style={{ fontSize: '1.5rem', marginBottom: '10px' }}>{quiz.title}</h3>
+                <p style={{ opacity: 0.7 }}>{quiz._count.questions} Questions</p>
+                {selectedQuizId === quiz.id && (
+                  <div className="selected-badge" style={{ 
+                    marginTop: '15px', 
+                    color: 'var(--color-primary)', 
+                    fontWeight: 'bold',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px'
+                  }}>
+                    <span>✓</span> Selected
                   </div>
-                ))}
+                )}
               </div>
             ))}
           </div>
+
+          {quizzes.length === 0 && !loading && (
+            <div className="no-data" style={{ marginTop: '50px' }}>
+              <p>You haven't created any quizzes yet.</p>
+              <Link to="/quizzes">
+                <button className="primary-btn" style={{ marginTop: '20px', background: 'var(--grad-primary)' }}>Create a Quiz First</button>
+              </Link>
+            </div>
+          )}
         </div>
 
-        <div className="wizard-actions">
+        <div className="wizard-actions" style={{ 
+          marginTop: '60px', 
+          padding: '30px', 
+          background: 'var(--color-surface)', 
+          borderRadius: '24px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
           <div className="status">
-            <strong>{selectedIds.length}</strong> questions selected
+            {selectedQuiz ? (
+              <div>
+                <strong style={{ fontSize: '1.2rem' }}>{selectedQuiz.title}</strong>
+                <p style={{ opacity: 0.7 }}>{selectedQuiz._count.questions} questions will be launched</p>
+              </div>
+            ) : (
+              <p>No quiz selected</p>
+            )}
           </div>
-          <button onClick={handleStartSession} className="launch-btn">
+          <button 
+            onClick={handleStartSession} 
+            className="launch-btn" 
+            disabled={!selectedQuizId || (selectedQuiz?._count.questions === 0)}
+            style={{
+              padding: '18px 40px',
+              fontSize: '1.2rem',
+              borderRadius: '16px',
+              background: (!selectedQuizId || selectedQuiz?._count.questions === 0) ? '#333' : 'var(--grad-success)',
+              border: 'none',
+              color: 'white',
+              cursor: 'pointer',
+              fontWeight: '800',
+              boxShadow: '0 10px 20px rgba(0,0,0,0.3)'
+            }}
+          >
             Launch Quiz 🚀
           </button>
         </div>

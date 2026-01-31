@@ -33,117 +33,127 @@
 .code-value {
   font-size: 48px;
   font-weight: 700;
+  font-size: 64px;
+  font-weight: 800;
+  color: white;
   font-family: 'JetBrains Mono', monospace;
-  letter-spacing: 4px;
-  color: var(--color-primary);
+  text-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
 }
 
 .lobby-main-tv {
   flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: var(--spacing-2xl);
-  padding: var(--spacing-xl) 0;
+  gap: var(--spacing-xl);
+  overflow: hidden;
 }
 
 .participants-count-tv {
-  margin: var(--spacing-xl) 0;
+  display: flex;
+  justify-content: center;
 }
 
 .count-circle {
-  width: 300px;
-  height: 300px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  box-shadow: var(--shadow-lg);
-  animation: pulse 2s ease-in-out infinite;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background: var(--color-surface);
+  border: 2px solid var(--color-primary);
+  box-shadow: var(--shadow-glow);
 }
 
 .count-number-tv {
-  font-size: 120px;
-  font-weight: 700;
+  font-size: 80px;
+  font-weight: 800;
   line-height: 1;
 }
 
 .count-label-tv {
-  font-size: 28px;
-  margin-top: var(--spacing-sm);
-  opacity: 0.9;
+  font-size: 20px;
+  color: var(--color-text-dim);
+  text-transform: uppercase;
+  font-weight: 600;
 }
 
 .participants-grid-tv {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: var(--spacing-md);
-  width: 100%;
-  max-width: 1400px;
+  padding: var(--spacing-md);
+  overflow-y: auto;
 }
 
 .participant-card-tv {
-  background: var(--color-bg-secondary);
-  padding: var(--spacing-lg);
-  border-radius: var(--radius-md);
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: var(--spacing-sm);
-  animation: slideInRight var(--transition-normal);
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-normal);
+  animation: slideInUp var(--transition-normal) both;
+}
+
+@keyframes slideInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .participant-avatar {
-  width: 80px;
-  height: 80px;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+  background: var(--grad-primary);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 36px;
-  font-weight: 700;
+  font-size: 32px;
+  font-weight: 800;
+  color: white;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .participant-name-tv {
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 600;
-  text-align: center;
+  color: white;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .lobby-footer-tv {
-  text-align: center;
-  padding: var(--spacing-xl) 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-lg) var(--spacing-xl);
+  background: var(--color-surface);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
 }
 
 .waiting-indicator {
   display: flex;
-  gap: var(--spacing-sm);
-  justify-content: center;
-  margin-bottom: var(--spacing-md);
+  gap: 12px;
 }
 
-.waiting-indicator .dot {
+.dot {
   width: 16px;
   height: 16px;
   border-radius: 50%;
   background: var(--color-primary);
-  animation: bounce 1.4s ease-in-out infinite;
+  animation: bounce 1.4s infinite ease-in-out both;
 }
 
-.waiting-indicator .dot:nth-child(1) {
-  animation-delay: 0s;
-}
-
-.waiting-indicator .dot:nth-child(2) {
-  animation-delay: 0.2s;
-}
-
-.waiting-indicator .dot:nth-child(3) {
-  animation-delay: 0.4s;
-}
+.dot:nth-child(1) { animation-delay: -0.32s; }
+.dot:nth-child(2) { animation-delay: -1.4s; }
+.dot:nth-child(3) { animation-delay: -0.4s; }
 
 @keyframes bounce {
   0%, 80%, 100% {

@@ -16,6 +16,7 @@ import * as questionController from './controllers/questionController.js';
 import * as scoringController from './controllers/scoringController.js';
 import * as analyticsController from './controllers/analyticsController.js';
 import * as authController from './controllers/authController.js';
+import * as quizController from './controllers/quizController.js';
 import { authenticateToken } from './middleware/authMiddleware.js';
 import { getBuzzerManager, removeBuzzerManager } from './controllers/buzzerController.js';
 
@@ -64,6 +65,13 @@ const activeSessions = new Map();
 app.post('/api/auth/register', authController.register);
 app.post('/api/auth/login', authController.login);
 app.get('/api/auth/me', authenticateToken, authController.getMe);
+
+// Quiz Routes
+app.get('/api/quizzes', authenticateToken, quizController.getAllQuizzes);
+app.get('/api/quizzes/:id', authenticateToken, quizController.getQuiz);
+app.post('/api/quizzes', authenticateToken, quizController.createQuiz);
+app.put('/api/quizzes/:id', authenticateToken, quizController.updateQuiz);
+app.delete('/api/quizzes/:id', authenticateToken, quizController.deleteQuiz);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -114,14 +122,45 @@ app.delete('/api/sessions/:id', async (req, res) => {
   }
 });
 
+// Create session from Quiz
+app.post('/api/sessions/quiz/:quizId', authenticateToken, async (req, res) => {
+  try {
+    const { settings } = req.body;
+    const { quizId } = req.params;
+    const hostId = req.user.id;
+    
+    // Get questions from quiz
+    const quiz = await prisma.quiz.findFirst({
+      where: { id: quizId, ownerId: hostId },
+      include: { questions: { orderBy: { createdAt: 'asc' } } }
+    });
+    
+    if (!quiz) {
+      return res.status(404).json({ error: 'Quiz not found' });
+    }
+    
+    if (quiz.questions.length === 0) {
+      return res.status(400).json({ error: 'Quiz has no questions' });
+    }
+    
+    const questionIds = quiz.questions.map(q => q.id);
+    const session = await sessionController.createSession(hostId, questionIds, { ...settings, quizId });
+    res.json(session);
+  } catch (error) {
+    console.error('Error creating session from quiz:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Question routes
 app.get('/api/questions', authenticateToken, async (req, res) => {
   try {
     const filters = {
+      quizId: req.query.quizId,
       type: req.query.type,
       category: req.query.category,
       round: req.query.round ? parseInt(req.query.round) : undefined,
-      ownerId: req.user.id // Only get my questions (plus public ones if we decide to implement that logic)
+      ownerId: req.user.id 
     };
     
     const questions = await questionController.getAllQuestions(filters);
@@ -304,6 +343,14 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
       // Send current participants list
       const participants = await sessionController.getParticipants(session.id);
       socket.emit('participants-list', { participants });
+      
+      // If session is completed, send analytics immediately
+      if (session.status === SESSION_STATUS.COMPLETED) {
+        const analytics = await analyticsController.getAnalytics(session.id);
+        if (analytics) {
+          socket.emit(SOCKET_EVENTS.ANALYTICS_READY, { analytics });
+        }
+      }
       
     } catch (error) {
       console.error('Error joining session:', error);
@@ -494,18 +541,26 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
         return;
       }
       
+      console.log(`[Quiz] Ending session ${sessionCode} (${sessionId})`);
+      
       await sessionController.updateSessionStatus(sessionId, SESSION_STATUS.COMPLETED);
       
-      // Generate analytics
+      // Generate analytics FIRST
       const analytics = await analyticsController.generateAnalytics(sessionId);
+      console.log(`[Quiz] Analytics generated for ${sessionCode}`);
       
+      // Send end signal to everyone
       io.to(sessionCode).emit(SOCKET_EVENTS.END_QUIZ, {
-        message: 'Quiz ended by host'
+        message: 'Quiz ended by host',
+        analytics // Include data in both just in case
       });
       
+      // Explicitly send analytics ready event
       io.to(sessionCode).emit(SOCKET_EVENTS.ANALYTICS_READY, {
         analytics
       });
+      
+      console.log(`[Quiz] Results broadcasted to ${sessionCode}`);
       
     } catch (error) {
       console.error('Error ending quiz:', error);

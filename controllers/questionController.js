@@ -46,6 +46,10 @@ export async function getAllQuestions(filters = {}) {
     if (filters.ownerId) {
       where.ownerId = filters.ownerId;
     }
+
+    if (filters.quizId) {
+      where.quizId = filters.quizId;
+    }
     
     const questions = await prisma.question.findMany({
       where,

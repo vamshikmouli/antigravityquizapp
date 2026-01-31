@@ -12,7 +12,6 @@ function QuestionDisplay({ socket, sessionData, userRole }) {
   const [showResults, setShowResults] = useState(false)
   const [questionResults, setQuestionResults] = useState(null)
   const [roundResults, setRoundResults] = useState(null)
-  const [finalAnalytics, setFinalAnalytics] = useState(null)
   
   const timerRef = useRef(null)
   
@@ -21,6 +20,7 @@ function QuestionDisplay({ socket, sessionData, userRole }) {
     
     // Question started
     socket.on('question-started', (data) => {
+      console.log('TV: question-started', data.question.id);
       setCurrentQuestion(data.question)
       setQuestionStartTime(data.startTime)
       setTimeRemaining(data.question.timeLimit)
@@ -44,6 +44,8 @@ function QuestionDisplay({ socket, sessionData, userRole }) {
     socket.on('show-results', (data) => {
       setShowResults(true)
       setQuestionResults(data)
+      // Inject correct answer into currentQuestion for highlighting
+      setCurrentQuestion(prev => prev ? { ...prev, correctAnswer: data.correctAnswer } : prev)
     })
     
     // Round Ended
@@ -55,6 +57,7 @@ function QuestionDisplay({ socket, sessionData, userRole }) {
 
     // Analytics Ready (End of Quiz)
     socket.on('analytics-ready', (data) => {
+      console.log('TV: analytics-ready', data);
       setFinalAnalytics(data.analytics)
     })
 
@@ -69,7 +72,6 @@ function QuestionDisplay({ socket, sessionData, userRole }) {
       socket.off('leaderboard-update')
       socket.off('show-results')
       socket.off('round-ended')
-      socket.off('analytics-ready')
       socket.off('trigger-next-question')
     }
   }, [socket])
@@ -103,16 +105,6 @@ function QuestionDisplay({ socket, sessionData, userRole }) {
           <h2>Waiting for next question...</h2>
         </div>
       </div>
-    )
-  }
-  
-  // If Quiz Completed, show massive detailed Results
-  if (finalAnalytics) {
-    return (
-      <FinalResultsDisplay 
-        analytics={finalAnalytics} 
-        sessionCode={socket.data?.sessionCode || ''} 
-      />
     )
   }
   

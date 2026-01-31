@@ -104,9 +104,9 @@ function JoinSession({ socket, onJoinSuccess }) {
         
         <div className="join-footer-tv">
           {user ? (
-            <p>Welcome back, {user.name}! <Link to="/dashboard" style={{ color: '#FFD93D', fontWeight: 'bold', marginLeft: '5px' }}>Go to Dashboard →</Link></p>
+            <p>Welcome back, {user.name}! <Link to="/dashboard" style={{ color: 'var(--color-primary)', fontWeight: 'bold', marginLeft: '5px' }}>Go to Dashboard →</Link></p>
           ) : (
-            <p>Are you a teacher? <Link to="/login" style={{ color: '#FFD93D', fontWeight: 'bold' }}>Login here</Link></p>
+            <p>Are you a teacher? <Link to="/login" style={{ color: 'var(--color-primary)', fontWeight: 'bold' }}>Login here</Link></p>
           )}
         </div>
       </div>

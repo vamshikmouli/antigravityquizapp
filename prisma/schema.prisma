@@ -13,6 +13,9 @@ model Question {
   type           QuestionType
   ownerId        String?  // Optional for now to support public questions
   owner          User?    @relation(fields: [ownerId], references: [id])
+  
+  quizId         String?
+  quiz           Quiz?    @relation(fields: [quizId], references: [id], onDelete: Cascade)
 
   options        String[] // Array of answer options
   correctAnswer  String
@@ -37,6 +40,18 @@ enum QuestionType {
   SHORT_ANSWER
 }
 
+model Quiz {
+  id          String     @id @default(uuid())
+  title       String
+  description String?
+  ownerId     String
+  owner       User       @relation(fields: [ownerId], references: [id])
+  questions   Question[]
+  sessions    Session[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
@@ -44,6 +59,7 @@ model User {
   name      String?
   createdAt DateTime @default(now())
   
+  quizzes   Quiz[]
   questions Question[]
   sessions  Session[]
 }
@@ -53,6 +69,9 @@ model Session {
   code                 String   @unique // e.g., "ABC-123"
   hostId               String
   host                 User     @relation(fields: [hostId], references: [id])
+
+  quizId               String?
+  quiz                 Quiz?    @relation(fields: [quizId], references: [id])
 
   currentQuestionIndex Int      @default(0)
   status               SessionStatus @default(WAITING)
@@ -124,6 +143,7 @@ model Analytics {
   averageScore       Float
   questionStats      Json     // Flexible JSON for question-level stats
   topPerformers      Json     // Array of top performers
+  detailedResults    Json?    // NEW: All participant results grouped by round
   scoreDistribution  Json     // Score ranges and counts
   buzzerStats        Json     // Buzzer-specific analytics
   createdAt          DateTime @default(now())

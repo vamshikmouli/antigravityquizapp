@@ -3,11 +3,13 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import JoinSession from './components/JoinSession'
 import WaitingLobby from './components/WaitingLobby'
 import QuestionDisplay from './components/QuestionDisplay'
+import FinalResultsDisplay from './components/FinalResultsDisplay'
 import ResultsDisplay from './components/ResultsDisplay'
 import LoginScreen from './components/LoginScreen'
 import RegisterScreen from './components/RegisterScreen'
 import HostDashboard from './components/HostDashboard'
 import QuestionsPage from './components/QuestionsPage'
+import QuizList from './components/QuizList'
 import CreateSessionPage from './components/CreateSessionPage'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { useWebSocket } from './hooks/useWebSocket'
@@ -64,6 +66,7 @@ function AppContent() {
   const [sessionData, setSessionData] = useState(null)
   const [quizStatus, setQuizStatus] = useState('waiting')
   const [userRole, setUserRole] = useState('display')
+  const [finalAnalytics, setFinalAnalytics] = useState(null)
   
   const { socket, connected, error } = useWebSocket()
   
@@ -80,13 +83,25 @@ function AppContent() {
       setQuizStatus('active')
     })
     
-    socket.on('end-quiz', () => {
+    socket.on('end-quiz', (data) => {
+      console.log('App: end-quiz', data);
       setQuizStatus('completed')
+      // If server combined them
+      if (data?.analytics) {
+        setFinalAnalytics(data.analytics);
+      }
     })
+
+    socket.on('analytics-ready', (data) => {
+      console.log('App: analytics-ready', data);
+      setFinalAnalytics(data.analytics);
+      setQuizStatus('completed');
+    });
     
     return () => {
       socket.off('start-quiz')
       socket.off('end-quiz')
+      socket.off('analytics-ready')
     }
   }, [socket])
 
@@ -95,12 +110,20 @@ function AppContent() {
     return (
       <Routes>
         <Route path="*" element={
-          quizStatus === 'active' ? (
-             quizStatus === 'completed' ? 
-               <ResultsDisplay socket={socket} sessionData={sessionData} userRole={userRole} /> : 
-               <QuestionDisplay socket={socket} sessionData={sessionData} userRole={userRole} />
-          ) : (
+          quizStatus === 'waiting' ? (
             <WaitingLobby socket={socket} sessionData={sessionData} userRole={userRole} />
+          ) : quizStatus === 'completed' && !finalAnalytics ? (
+            <div className="ending-transition h-screen flex flex-col items-center justify-center p-10 text-center">
+              <div className="spinner mb-8"></div>
+              <h1 className="text-4xl font-extrabold mb-4">Quiz Completed!</h1>
+              <p className="text-xl text-dim">Calculating final rankings and scorecards...</p>
+            </div>
+          ) : (
+            finalAnalytics ? (
+              <FinalResultsDisplay analytics={finalAnalytics} sessionCode={sessionCode} />
+            ) : (
+              <QuestionDisplay socket={socket} sessionData={sessionData} userRole={userRole} />
+            )
           )
         } />
       </Routes>
@@ -152,7 +175,8 @@ function AppContent() {
         
         {/* Protected Routes */}
         <Route path="/dashboard" element={<ProtectedRoute><HostDashboard /></ProtectedRoute>} />
-        <Route path="/questions" element={<ProtectedRoute><QuestionsPage /></ProtectedRoute>} />
+        <Route path="/quizzes" element={<ProtectedRoute><QuizList /></ProtectedRoute>} />
+        <Route path="/quizzes/:quizId" element={<ProtectedRoute><QuestionsPage /></ProtectedRoute>} />
         <Route path="/create-session" element={<ProtectedRoute><CreateSessionPage /></ProtectedRoute>} />
         
         {/* Helper to connect host after creating session */}

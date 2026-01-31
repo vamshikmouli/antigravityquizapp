@@ -10,25 +10,58 @@ function HostDashboard() {
       <header className="dashboard-header">
         <div>
           <h1>Welcome, {user?.name}</h1>
-          <p className="subtitle">Quiz Host Dashboard</p>
+          <p className="subtitle" style={{ fontSize: '1.2rem', opacity: 0.7 }}>Quiz Host Dashboard</p>
         </div>
-        <button onClick={logout} className="delete-btn" style={{ padding: '8px 16px' }}>Logout</button>
+        <button onClick={logout} className="delete-btn" style={{ padding: '12px 24px', fontSize: '1rem', borderRadius: '12px' }}>Logout</button>
       </header>
 
-      <div className="dashboard-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px', marginTop: '40px' }}>
-        <div className="card dashboard-card" style={{ background: 'rgba(255,255,255,0.1)', padding: '30px', borderRadius: '20px' }}>
-          <h2>📚 Question Bank</h2>
-          <p style={{ margin: '15px 0 25px', opacity: 0.8 }}>Manage your collection of questions. Add new questions, edit existing ones, or import from CSV.</p>
-          <Link to="/questions">
-            <button className="primary-btn">Manage Questions</button>
+      <div className="dashboard-cards-grid" style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))', 
+        gap: '40px', 
+        marginTop: '60px' 
+      }}>
+        <div className="card-glass" style={{ 
+          padding: '50px', 
+          borderRadius: '32px', 
+          border: '1px solid rgba(255,255,255,0.1)',
+          background: 'rgba(255,255,255,0.03)',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          minHeight: '350px'
+        }}>
+          <div>
+            <span style={{ fontSize: '64px', display: 'block', marginBottom: '20px' }}>📚</span>
+            <h2 style={{ fontSize: '2.5rem', marginBottom: '20px' }}>Question Bank</h2>
+            <p style={{ fontSize: '1.2rem', marginBottom: '40px', opacity: 0.7, lineHeight: 1.6 }}>
+              Manage your collection of questions. Add new questions, edit existing ones, or import from CSV.
+            </p>
+          </div>
+          <Link to="/quizzes">
+            <button className="join-button-tv" style={{ width: '100%', fontSize: '1.5rem' }}>Manage Quizzes</button>
           </Link>
         </div>
 
-        <div className="card dashboard-card" style={{ background: 'rgba(255,255,255,0.1)', padding: '30px', borderRadius: '20px' }}>
-          <h2>🚀 Start Session</h2>
-          <p style={{ margin: '15px 0 25px', opacity: 0.8 }}>Create a new quiz session, select questions, and launch the game on the big screen.</p>
+        <div className="card-glass" style={{ 
+          padding: '50px', 
+          borderRadius: '32px', 
+          border: '1px solid rgba(255,255,255,0.1)',
+          background: 'rgba(255,255,255,0.03)',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          minHeight: '350px'
+        }}>
+          <div>
+            <span style={{ fontSize: '64px', display: 'block', marginBottom: '20px' }}>🚀</span>
+            <h2 style={{ fontSize: '2.5rem', marginBottom: '20px' }}>Start Session</h2>
+            <p style={{ fontSize: '1.2rem', marginBottom: '40px', opacity: 0.7, lineHeight: 1.6 }}>
+              Create a new quiz session, select questions, and launch the game on the big screen.
+            </p>
+          </div>
           <Link to="/create-session">
-            <button className="primary-btn" style={{ background: 'var(--color-success)' }}>Create New Session</button>
+            <button className="join-button-tv" style={{ width: '100%', fontSize: '1.5rem', background: 'var(--grad-success)' }}>Create New Session</button>
           </Link>
         </div>
       </div>

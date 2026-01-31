@@ -24,6 +24,7 @@ export async function createSession(hostId, questionIds, settings = {}) {
       data: {
         code,
         hostId,
+        quizId: settings.quizId,
         musicEnabled: settings.musicEnabled ?? true,
         showLiveResults: settings.showLiveResults ?? true,
         allowLateJoin: settings.allowLateJoin ?? false,

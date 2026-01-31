@@ -9,7 +9,7 @@ const QUESTION_TYPES = {
   SHORT_ANSWER: 'SHORT_ANSWER'
 };
 
-function QuestionForm({ onClose, onSave, editingQuestion = null }) {
+function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null }) {
   const { token } = useAuth();
   const [formData, setFormData] = useState({
     text: editingQuestion?.text || '',
@@ -19,7 +19,8 @@ function QuestionForm({ onClose, onSave, editingQuestion = null }) {
     points: editingQuestion?.points || 100,
     negativePoints: editingQuestion?.negativePoints || 0,
     timeLimit: editingQuestion?.timeLimit || 30,
-    round: editingQuestion?.round || 1
+    round: editingQuestion?.round || 1,
+    quizId: editingQuestion?.quizId || quizId
   });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);

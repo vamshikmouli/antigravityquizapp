@@ -1,24 +1,35 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import QuestionForm from './QuestionForm';
-import { Link } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import './QuestionManager.css';
 
 function QuestionsPage() {
+  const { quizId } = useParams();
   const { token } = useAuth();
+  const [quiz, setQuiz] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState(null);
   const [selectedRound, setSelectedRound] = useState('All');
 
-  const fetchQuestions = async () => {
+  const fetchQuizData = async () => {
     try {
-      const res = await fetch('/api/questions', {
+      setLoading(true);
+      // Fetch Quiz details
+      const quizRes = await fetch(`/api/quizzes/${quizId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      const data = await res.json();
-      setQuestions(data);
+      const quizData = await quizRes.json();
+      setQuiz(quizData);
+      
+      // Fetch Questions for this Quiz
+      const qRes = await fetch(`/api/questions?quizId=${quizId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const qData = await qRes.json();
+      setQuestions(qData);
     } catch (err) {
       console.error(err);
     } finally {
@@ -27,8 +38,10 @@ function QuestionsPage() {
   };
 
   useEffect(() => {
-    fetchQuestions();
-  }, [token]);
+    if (quizId && token) {
+      fetchQuizData();
+    }
+  }, [quizId, token]);
 
   const handleDelete = async (id) => {
     if (!confirm('Are you sure you want to delete this question?')) return;
@@ -38,7 +51,7 @@ function QuestionsPage() {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      fetchQuestions();
+      fetchQuizData();
     } catch (err) {
       console.error(err);
     }
@@ -52,9 +65,12 @@ function QuestionsPage() {
   return (
     <div className="dashboard-container">
       <header className="dashboard-header">
-        <h1>Question Bank</h1>
+        <div>
+          <h1 style={{ marginBottom: '8px' }}>{quiz?.title || 'Quiz Details'}</h1>
+          <p style={{ color: 'var(--color-primary)', fontWeight: 'bold' }}>{questions.length} Questions</p>
+        </div>
         <div className="header-actions">
-          <Link to="/" className="back-link">← Dashboard</Link>
+          <Link to="/quizzes" className="back-link">← All Quizzes</Link>
           <button onClick={() => { setEditingQuestion(null); setShowForm(true); }} className="add-btn">
             + Add Question
           </button>
@@ -96,8 +112,9 @@ function QuestionsPage() {
       {showForm && (
         <QuestionForm 
           onClose={() => setShowForm(false)} 
-          onSave={fetchQuestions}
+          onSave={fetchQuizData}
           editingQuestion={editingQuestion}
+          quizId={quizId}
         />
       )}
     </div>
