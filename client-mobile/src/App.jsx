@@ -38,7 +38,7 @@ function App() {
   }, [socket])
   
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/play">
       <div className="container">
         {/* Connection Status */}
         <div style={{ 
