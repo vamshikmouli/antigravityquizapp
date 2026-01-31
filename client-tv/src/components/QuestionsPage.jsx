@@ -14,7 +14,7 @@ function QuestionsPage() {
 
   const fetchQuestions = async () => {
     try {
-      const res = await fetch('http://localhost:3000/api/questions', {
+      const res = await fetch('/api/questions', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -34,7 +34,7 @@ function QuestionsPage() {
     if (!confirm('Are you sure you want to delete this question?')) return;
     
     try {
-      await fetch(`http://localhost:3000/api/questions/${id}`, {
+      await fetch(`/api/questions/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });

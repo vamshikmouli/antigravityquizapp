@@ -13,7 +13,7 @@ function CreateSessionPage() {
   useEffect(() => {
     const fetchQuestions = async () => {
       try {
-        const res = await fetch('http://localhost:3000/api/questions', {
+        const res = await fetch('/api/questions', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();
@@ -37,7 +37,7 @@ function CreateSessionPage() {
     if (selectedIds.length === 0) return alert('Select at least one question');
 
     try {
-      const res = await fetch('http://localhost:3000/api/sessions', {
+      const res = await fetch('/api/sessions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

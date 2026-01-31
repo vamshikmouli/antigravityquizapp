@@ -77,8 +77,8 @@ function QuestionForm({ onClose, onSave, editingQuestion = null }) {
 
     try {
       const url = editingQuestion 
-        ? `http://localhost:3000/api/questions/${editingQuestion.id}`
-        : 'http://localhost:3000/api/questions';
+        ? `/api/questions/${editingQuestion.id}`
+        : '/api/questions';
 
       const method = editingQuestion ? 'PUT' : 'POST';
 
