@@ -638,33 +638,49 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
 // SERVE FRONTEND ASSETS
 // ============================================================================
 
-// ============================================================================
-// SERVE FRONTEND ASSETS
-// ============================================================================
+const tvDistPath = path.resolve(__dirname, 'client-tv', 'dist');
+const mobileDistPath = path.resolve(__dirname, 'client-mobile', 'dist');
 
-const tvDistPath = path.join(__dirname, 'client-tv/dist');
-const mobileDistPath = path.join(__dirname, 'client-mobile/dist');
+// Middleware to log asset requests for debugging
+app.use((req, res, next) => {
+  if (req.path.includes('.')) {
+    console.log(`[Asset] ${req.method} ${req.path}`);
+  }
+  next();
+});
 
-// Serve Student Play screen at /play
-app.use('/play', express.static(mobileDistPath, {
-  index: false // Prevent serving index.html automatically here to handle catch-all below
-}));
+// 1. Explicitly serve assets for the Play screen
+// Requests for /play/assets/... will be served from client-mobile/dist/assets
+app.use('/play/assets', express.static(path.join(mobileDistPath, 'assets')));
 
-// Route for Student Play catch-all
-app.get('/play/*', (req, res) => {
+// 2. Explicitly serve root assets (for the TV screen / Admin)
+// Requests for /assets/... will be served from client-tv/dist/assets
+app.use('/assets', express.static(path.join(tvDistPath, 'assets')));
+
+// 3. Serve the Student Play screen at /play
+app.get('/play', (req, res) => {
   res.sendFile(path.join(mobileDistPath, 'index.html'));
 });
 
-// Serve Admin/TV Dashboard at root /
-app.use(express.static(tvDistPath));
+// 4. Handle sub-routes under /play (for client-side routing)
+app.get('/play/*', (req, res) => {
+  // If request has a file extension, it's a missing asset, don't fallback to index.html
+  if (req.path.includes('.')) {
+    return res.status(404).send('Not found');
+  }
+  res.sendFile(path.join(mobileDistPath, 'index.html'));
+});
 
-// Route for TV Display catch-all
+// 5. Serve TV Display / Admin app at root
+// This serves all other static files (like /favicon.ico) from the TV dist
+app.use(express.static(tvDistPath, { index: false }));
+
+// 6. Catch-all for TV Display / Admin app
 app.get('*', (req, res) => {
   // Only serve index.html if it's not an API route and not a request for a static asset
   if (!req.path.startsWith('/api') && !req.path.includes('.')) {
     res.sendFile(path.join(tvDistPath, 'index.html'));
   } else if (!req.path.startsWith('/api')) {
-    // If it's a missing file (has an extension but not found by static), send 404
     res.status(404).send('Not found');
   }
 });
@@ -676,7 +692,7 @@ app.get('*', (req, res) => {
 httpServer.listen(PORT, () => {
   console.log(`🚀 Quiz App Server running on port ${PORT}`);
   console.log(`📡 WebSocket server ready`);
-  console.log(`🌐 CORS enabled for: ${process.env.CORS_ORIGIN}`);
+  console.log(`🌐 CORS enabled for:`, allowedOrigins);
 });
 
 // Graceful shutdown
