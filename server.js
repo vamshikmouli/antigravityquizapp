@@ -638,18 +638,34 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
 // SERVE FRONTEND ASSETS
 // ============================================================================
 
+// ============================================================================
+// SERVE FRONTEND ASSETS
+// ============================================================================
+
+const tvDistPath = path.join(__dirname, 'client-tv/dist');
+const mobileDistPath = path.join(__dirname, 'client-mobile/dist');
+
 // Serve Student Play screen at /play
-app.use('/play', express.static(path.join(__dirname, 'client-mobile/dist')));
+app.use('/play', express.static(mobileDistPath, {
+  index: false // Prevent serving index.html automatically here to handle catch-all below
+}));
+
+// Route for Student Play catch-all
 app.get('/play/*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'client-mobile/dist/index.html'));
+  res.sendFile(path.join(mobileDistPath, 'index.html'));
 });
 
 // Serve Admin/TV Dashboard at root /
-app.use('/', express.static(path.join(__dirname, 'client-tv/dist')));
-app.get('/*', (req, res) => {
-  // Only serve index.html if it's not an API route
-  if (!req.path.startsWith('/api')) {
-    res.sendFile(path.join(__dirname, 'client-tv/dist/index.html'));
+app.use(express.static(tvDistPath));
+
+// Route for TV Display catch-all
+app.get('*', (req, res) => {
+  // Only serve index.html if it's not an API route and not a request for a static asset
+  if (!req.path.startsWith('/api') && !req.path.includes('.')) {
+    res.sendFile(path.join(tvDistPath, 'index.html'));
+  } else if (!req.path.startsWith('/api')) {
+    // If it's a missing file (has an extension but not found by static), send 404
+    res.status(404).send('Not found');
   }
 });
 
