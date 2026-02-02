@@ -20,8 +20,12 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null }
     negativePoints: editingQuestion?.negativePoints || 0,
     timeLimit: editingQuestion?.timeLimit || 30,
     round: editingQuestion?.round || 1,
+    imageUrl: editingQuestion?.imageUrl || '',
+    optionImages: editingQuestion?.optionImages || (editingQuestion?.options?.length ? editingQuestion.options.map(() => '') : ['', '', '', '']),
+    readingTime: editingQuestion?.readingTime || 0,
     quizId: editingQuestion?.quizId || quizId
   });
+  const [uploading, setUploading] = useState({ question: false, options: [] });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -60,6 +64,47 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null }
     const newOptions = [...formData.options];
     newOptions[index] = value;
     setFormData(prev => ({ ...prev, options: newOptions }));
+  };
+
+  const handleFileUpload = async (e, type, index = null) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const data = new FormData();
+    data.append('image', file);
+
+    try {
+      if (type === 'question') setUploading(prev => ({ ...prev, question: true }));
+      else {
+        const newOpts = [...uploading.options];
+        newOpts[index] = true;
+        setUploading(prev => ({ ...prev, options: newOpts }));
+      }
+
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: data
+      });
+      const result = await res.json();
+      
+      if (type === 'question') {
+        setFormData(prev => ({ ...prev, imageUrl: result.imageUrl }));
+      } else {
+        const newImgs = [...formData.optionImages];
+        newImgs[index] = result.imageUrl;
+        setFormData(prev => ({ ...prev, optionImages: newImgs }));
+      }
+    } catch (err) {
+      setError('Upload failed');
+    } finally {
+      if (type === 'question') setUploading(prev => ({ ...prev, question: false }));
+      else {
+        const newOpts = [...uploading.options];
+        newOpts[index] = false;
+        setUploading(prev => ({ ...prev, options: newOpts }));
+      }
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -157,6 +202,29 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null }
                 className="modern-textarea"
               />
             </div>
+
+            {/* Question Image */}
+            <div className="form-group">
+              <label>Question Image (Optional)</label>
+              <div className="upload-container">
+                {formData.imageUrl && (
+                  <div className="preview-box">
+                    <img src={formData.imageUrl} alt="Question preview" />
+                    <button type="button" className="remove-img" onClick={() => handleChange('imageUrl', '')}>×</button>
+                  </div>
+                )}
+                <input 
+                  type="file" 
+                  accept="image/*"
+                  onChange={(e) => handleFileUpload(e, 'question')}
+                  className="file-input"
+                  id="q-image"
+                />
+                <label htmlFor="q-image" className="file-label">
+                  {uploading.question ? 'Uploading...' : '📁 Choose Image'}
+                </label>
+              </div>
+            </div>
           </div>
 
           <div className="form-section">
@@ -178,13 +246,31 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null }
                         className="custom-radio"
                       />
                     </div>
-                    <input 
-                      type="text" 
-                      value={opt}
-                      onChange={(e) => handleOptionChange(idx, e.target.value)}
-                      placeholder={`Answer ${String.fromCharCode(65 + idx)}`}
-                      className="modern-input"
-                    />
+                    
+                    {formData.optionImages[idx] && (
+                      <div className="option-preview">
+                        <img src={formData.optionImages[idx]} alt="" />
+                        <button type="button" onClick={() => {
+                          const newImgs = [...formData.optionImages];
+                          newImgs[idx] = '';
+                          setFormData(prev => ({ ...prev, optionImages: newImgs }));
+                        }}>×</button>
+                      </div>
+                    )}
+
+                    <div className="option-controls">
+                      <input 
+                        type="text" 
+                        value={opt}
+                        onChange={(e) => handleOptionChange(idx, e.target.value)}
+                        placeholder={`Answer ${String.fromCharCode(65 + idx)}`}
+                        className="modern-input"
+                      />
+                      <label className="opt-file-btn">
+                        <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, 'option', idx)} />
+                        {uploading.options[idx] ? '...' : '🖼️'}
+                      </label>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -251,6 +337,18 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null }
                   value={formData.negativePoints}
                   onChange={(e) => handleChange('negativePoints', parseInt(e.target.value))}
                   className="modern-input"
+                />
+              </div>
+
+              <div className="form-group third">
+                <label>Reading Time (s)</label>
+                <input 
+                  type="number" 
+                  min="0"
+                  value={formData.readingTime}
+                  onChange={(e) => handleChange('readingTime', parseInt(e.target.value))}
+                  className="modern-input"
+                  placeholder="Buzzer delay"
                 />
               </div>
             </div>

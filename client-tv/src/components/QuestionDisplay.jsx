@@ -117,7 +117,7 @@ function QuestionDisplay({ socket, sessionData, userRole }) {
           <h2 className="recap-subtitle">Next: Round {roundResults.nextRound}</h2>
           
           <div className="recap-leaderboard">
-            <Leaderboard leaderboard={leaderboard} />
+            <Leaderboard leaderboard={leaderboard} variant="large" />
           </div>
           
           {userRole === 'host' && (
@@ -177,6 +177,11 @@ function QuestionDisplay({ socket, sessionData, userRole }) {
           
           {/* Question */}
           <div className="question-card card-gradient">
+            {currentQuestion.imageUrl && (
+              <div className="question-image-tv">
+                <img src={currentQuestion.imageUrl} alt="Question" />
+              </div>
+            )}
             <h2 className="question-text-tv">{currentQuestion.text}</h2>
           </div>
           
@@ -203,7 +208,12 @@ function QuestionDisplay({ socket, sessionData, userRole }) {
                 }}
               >
                 <div className="option-label-tv">{optionLabels[index]}</div>
-                <div className="option-text-tv">{option}</div>
+                <div className="option-content-tv">
+                  {currentQuestion.optionImages && currentQuestion.optionImages[index] && (
+                    <img src={currentQuestion.optionImages[index]} alt="" className="option-image-tv" />
+                  )}
+                  <div className="option-text-tv">{option}</div>
+                </div>
                 {showResults && option === currentQuestion.correctAnswer && (
                   <div className="correct-indicator">✓</div>
                 )}

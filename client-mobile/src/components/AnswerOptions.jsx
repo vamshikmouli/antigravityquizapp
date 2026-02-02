@@ -8,8 +8,7 @@ const optionColors = {
 }
 
 const optionLabels = ['A', 'B', 'C', 'D']
-
-function AnswerOptions({ options, onSelect, disabled }) {
+function AnswerOptions({ options, onSelect, disabled, optionImages = [] }) {
   return (
     <div className="answer-options">
       {options.map((option, index) => (
@@ -24,7 +23,12 @@ function AnswerOptions({ options, onSelect, disabled }) {
           disabled={disabled}
         >
           <span className="option-label">{optionLabels[index]}.</span>
-          <span className="option-text">{option}</span>
+          <div className="option-content">
+            {optionImages[index] && (
+              <img src={optionImages[index]} alt="" className="option-image" />
+            )}
+            <span className="option-text">{option}</span>
+          </div>
         </button>
       ))}
     </div>

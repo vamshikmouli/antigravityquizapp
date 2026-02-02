@@ -10,24 +10,75 @@ function App() {
   const [sessionCode, setSessionCode] = useState(null)
   const [participantData, setParticipantData] = useState(null)
   const [quizStatus, setQuizStatus] = useState('waiting') // waiting, active, completed
+  const [initialGameState, setInitialGameState] = useState(null)
   
   const { socket, connected, error } = useWebSocket()
   
-  const handleJoinSuccess = (code, participant) => {
+  const handleJoinSuccess = (code, participant, currentGameState) => {
     setSessionCode(code)
     setParticipantData(participant)
+    
+    // Save to localStorage for rejoining
+    localStorage.setItem('quiz-session', JSON.stringify({
+      code,
+      participantId: participant.id,
+      name: participant.name
+    }))
+
+    if (currentGameState) {
+      setInitialGameState(currentGameState)
+      setQuizStatus(currentGameState.question ? 'active' : 'waiting')
+    }
   }
   
+  // Auto-rejoin on mount/connect
+  useEffect(() => {
+    if (!socket || !connected) return
+    
+    const savedSession = localStorage.getItem('quiz-session')
+    if (savedSession) {
+      try {
+        const { code, participantId, name } = JSON.parse(savedSession)
+        
+        // Only emit if we haven't already joined with this specific socket ID
+        // or if we need to re-establish the session after a disconnect
+        console.log('Establishing session on connection:', code)
+        
+        socket.emit('join-session', {
+          code,
+          participantId,
+          name,
+          role: 'student'
+        })
+        
+        // We use .on instead of .once here in case of multiple reconnections,
+        // but it's better to just handle the response
+        const handleRejoin = (data) => {
+          handleJoinSuccess(data.session.code, data.participant, data.currentGameState)
+          if (data.session.status === 'ACTIVE') setQuizStatus('active')
+          if (data.session.status === 'COMPLETED') setQuizStatus('completed')
+        }
+        
+        socket.once('session-joined', handleRejoin)
+      } catch (err) {
+        console.error('Failed to parse saved session:', err)
+        localStorage.removeItem('quiz-session')
+      }
+    }
+  }, [socket, connected])
+
   useEffect(() => {
     if (!socket) return
     
     // Listen for quiz start
     socket.on('start-quiz', () => {
+      console.log('[Quiz] Start signal received');
       setQuizStatus('active')
     })
     
     // Listen for quiz end
-    socket.on('end-quiz', () => {
+    socket.on('end-quiz', (data) => {
+      console.log('[Quiz] End signal received', data);
       setQuizStatus('completed')
     })
     
@@ -79,7 +130,9 @@ function App() {
             path="/" 
             element={
               sessionCode ? 
-                <Navigate to="/lobby" /> : 
+                (quizStatus === 'completed' ? <Navigate to="/results" /> : 
+                 quizStatus === 'active' ? <Navigate to="/quiz" /> : 
+                 <Navigate to="/lobby" />) : 
                 <JoinScreen socket={socket} onJoinSuccess={handleJoinSuccess} />
             } 
           />
@@ -87,22 +140,25 @@ function App() {
             path="/lobby" 
             element={
               sessionCode ? 
-                (quizStatus === 'active' ? 
-                  <Navigate to="/quiz" /> : 
-                  <LobbyScreen socket={socket} participantData={participantData} />
-                ) : 
+                (quizStatus === 'completed' ? <Navigate to="/results" /> : 
+                 quizStatus === 'active' ? <Navigate to="/quiz" /> : 
+                 <LobbyScreen socket={socket} participantData={participantData} />) : 
                 <Navigate to="/" />
             } 
           />
           <Route 
             path="/quiz" 
             element={
-              sessionCode && quizStatus === 'active' ? 
-                (quizStatus === 'completed' ?
-                  <Navigate to="/results" /> :
-                  <QuizScreen socket={socket} participantData={participantData} />
-                ) : 
-                <Navigate to="/lobby" />
+              sessionCode ? 
+                (quizStatus === 'completed' ? <Navigate to="/results" /> : 
+                 quizStatus === 'active' ? 
+                 <QuizScreen 
+                   socket={socket} 
+                   participantData={participantData} 
+                   initialGameState={initialGameState}
+                 /> : 
+                 <Navigate to="/lobby" />) : 
+                <Navigate to="/" />
             } 
           />
           <Route 
@@ -110,7 +166,7 @@ function App() {
             element={
               sessionCode && quizStatus === 'completed' ? 
                 <ResultsScreen socket={socket} participantData={participantData} /> : 
-                <Navigate to="/" />
+                (sessionCode && quizStatus === 'active' ? <Navigate to="/quiz" /> : <Navigate to="/" />)
             } 
           />
         </Routes>

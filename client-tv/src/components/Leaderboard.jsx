@@ -1,6 +1,6 @@
 import './Leaderboard.css'
 
-function Leaderboard({ leaderboard, buzzerWinner }) {
+function Leaderboard({ leaderboard, buzzerWinner, variant = 'standard' }) {
   const topTen = leaderboard.slice(0, 10)
   
   const getRankEmoji = (rank) => {
@@ -11,7 +11,7 @@ function Leaderboard({ leaderboard, buzzerWinner }) {
   }
   
   return (
-    <div className="leaderboard-panel card">
+    <div className={`leaderboard-panel card ${variant === 'large' ? 'large-view' : ''}`}>
       <div className="leaderboard-header">
         <h3>🏆 Live Leaderboard</h3>
       </div>

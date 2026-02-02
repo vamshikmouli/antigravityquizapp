@@ -51,7 +51,7 @@ function JoinScreen({ socket, onJoinSuccess }) {
     // Listen for join confirmation
     socket.once('session-joined', (data) => {
       setLoading(false)
-      onJoinSuccess(data.session.code, data.participant)
+      onJoinSuccess(data.session.code, data.participant, data.currentGameState)
       navigate('/lobby')
     })
     

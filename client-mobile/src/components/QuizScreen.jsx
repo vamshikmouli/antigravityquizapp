@@ -3,20 +3,36 @@ import BuzzerButton from './BuzzerButton'
 import AnswerOptions from './AnswerOptions'
 import './QuizScreen.css'
 
-function QuizScreen({ socket, participantData }) {
-  const [currentQuestion, setCurrentQuestion] = useState(null)
-  const [questionStartTime, setQuestionStartTime] = useState(null)
+function QuizScreen({ socket, participantData, initialGameState }) {
+  const [currentQuestion, setCurrentQuestion] = useState(initialGameState?.question || null)
+  const [questionStartTime, setQuestionStartTime] = useState(initialGameState?.startTime || null)
   const [timeRemaining, setTimeRemaining] = useState(0)
   const [buzzerActive, setBuzzerActive] = useState(false)
   const [buzzerLocked, setBuzzerLocked] = useState(false)
   const [buzzerWinner, setBuzzerWinner] = useState(null)
-  const [canAnswer, setCanAnswer] = useState(false)
-  const [answerSubmitted, setAnswerSubmitted] = useState(false)
-  const [feedback, setFeedback] = useState(null)
+  const [canAnswer, setCanAnswer] = useState(initialGameState?.question && !initialGameState?.hasAnswered && initialGameState?.question.type !== 'BUZZER')
+  const [answerSubmitted, setAnswerSubmitted] = useState(initialGameState?.hasAnswered || false)
+  const [feedback, setFeedback] = useState(initialGameState?.lastAnswerResult || null)
   const [score, setScore] = useState(participantData?.score || 0)
   const [rank, setRank] = useState(null)
+  const [isReading, setIsReading] = useState(false)
   
   const timerRef = useRef(null)
+
+  // Initialize from initialGameState if provided and not already set
+  useEffect(() => {
+    if (initialGameState && !currentQuestion) {
+      setCurrentQuestion(initialGameState.question)
+      setQuestionStartTime(initialGameState.startTime)
+      setAnswerSubmitted(initialGameState.hasAnswered)
+      if (initialGameState.hasAnswered) {
+        setFeedback(initialGameState.lastAnswerResult)
+        setCanAnswer(false)
+      } else {
+        setCanAnswer(initialGameState.question.type !== 'BUZZER')
+      }
+    }
+  }, [initialGameState, currentQuestion])
   
   useEffect(() => {
     if (!socket) return
@@ -38,11 +54,18 @@ function QuizScreen({ socket, participantData }) {
       } else {
         setCanAnswer(false)
       }
+      // Show reading indicator if readingTime > 0
+      if (data.question.readingTime > 0) {
+        setIsReading(true)
+      } else {
+        setIsReading(false)
+      }
     })
     
     // Buzzer activated
     socket.on('buzzer-activated', () => {
       setBuzzerActive(true)
+      setIsReading(false)
       setCanAnswer(false)
     })
     
@@ -196,6 +219,11 @@ function QuizScreen({ socket, participantData }) {
       
       {/* Question */}
       <div className="question-container">
+        {currentQuestion.imageUrl && (
+          <div className="question-image-container">
+            <img src={currentQuestion.imageUrl} alt="Question" className="question-image" />
+          </div>
+        )}
         <h2 className="question-text">{currentQuestion.text}</h2>
         <div className="question-meta">
           <span className="points-badge">+{currentQuestion.points} pts</span>
@@ -230,6 +258,11 @@ function QuizScreen({ socket, participantData }) {
             )}
           </div>
         </div>
+      ) : isReading && currentQuestion.type === 'BUZZER' ? (
+        <div className="reading-indicator">
+          <div className="pulse-dot"></div>
+          <p>Read the question... Buzzer opening soon!</p>
+        </div>
       ) : null}
       
       {/* Short Answer Input */}
@@ -257,6 +290,7 @@ function QuizScreen({ socket, participantData }) {
       {canAnswer && !answerSubmitted && currentQuestion.type !== 'SHORT_ANSWER' && (
         <AnswerOptions 
           options={currentQuestion.options}
+          optionImages={currentQuestion.optionImages}
           onSelect={handleAnswerSelect}
           disabled={!canAnswer}
         />

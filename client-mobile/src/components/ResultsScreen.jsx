@@ -8,14 +8,40 @@ function ResultsScreen({ socket, participantData }) {
   useEffect(() => {
     if (!socket) return
     
-    socket.on('analytics-ready', (data) => {
-      setAnalytics(data.analytics)
+    // Check if analytics are already available (e.g. on refresh after quiz ended)
+    socket.emit('get-analytics', {}, (response) => {
+      if (response && response.analytics) {
+        handleAnalytics(response.analytics);
+      }
+    });
+
+    const handleAnalytics = (data) => {
+      console.log('[Results] Analytics received', data);
+      setAnalytics(data)
       
-      // Find my stats
-      const myData = data.analytics.topPerformers.find(p => p.name === participantData.name)
+      // Find my stats – try multiple ways to match
+      let myData = data.detailedResults?.find(p => p.id === participantData.id);
+      
+      if (!myData) {
+        myData = data.topPerformers?.find(p => p.name === participantData.name);
+      }
+
       if (myData) {
         setMyStats(myData)
+      } else {
+        console.warn('[Results] Personal stats not found in analytics');
+        // Fallback to basic data if available
+        setMyStats({
+          name: participantData.name,
+          score: participantData.score || 0,
+          rank: '?',
+          buzzerWins: 0
+        });
       }
+    }
+
+    socket.on('analytics-ready', (data) => {
+      handleAnalytics(data.analytics);
     })
     
     return () => {
@@ -28,7 +54,7 @@ function ResultsScreen({ socket, participantData }) {
       <div className="results-screen">
         <div className="loading-results">
           <div className="spinner"></div>
-          <p>Calculating results...</p>
+          <p>Calculating final results...</p>
         </div>
       </div>
     )
@@ -42,17 +68,19 @@ function ResultsScreen({ socket, participantData }) {
   }
   
   const getRankMessage = (rank) => {
-    if (rank === 1) return 'Amazing! You\'re #1!'
-    if (rank === 2) return 'Great job! Second place!'
-    if (rank === 3) return 'Well done! Third place!'
-    if (rank <= 5) return 'Good effort! Top 5!'
-    return 'Thanks for playing!'
+    if (rank === 1) return 'Incredible! You\'re the Champion! 🏆'
+    if (rank === 2) return 'So close! Amazing 🥈 rank!'
+    if (rank === 3) return 'Fantastic! You made the podium! 🥉'
+    if (rank <= 5) return 'Great job! You\'re among the elite!'
+    if (rank <= 10) return 'Well played! Top 10 finish!'
+    return 'Good effort! Thanks for playing!'
   }
   
   return (
     <div className="results-screen fade-in">
       <div className="results-header">
         <h1>Quiz Complete!</h1>
+        <p className="subtitle">Here's how you performed</p>
       </div>
       
       <div className="my-results card-glass">
@@ -64,7 +92,7 @@ function ResultsScreen({ socket, participantData }) {
         
         <div className="stats-grid">
           <div className="stat-item">
-            <div className="stat-value">{myStats.score}</div>
+            <div className="stat-value">{myStats.score || myStats.totalScore}</div>
             <div className="stat-label">Total Score</div>
           </div>
           <div className="stat-item">
@@ -75,7 +103,7 @@ function ResultsScreen({ socket, participantData }) {
       </div>
       
       <div className="leaderboard-section">
-        <h2>Top Performers</h2>
+        <h2>Global Leaderboard</h2>
         <div className="leaderboard">
           {analytics.topPerformers.slice(0, 10).map((performer, index) => (
             <div 
@@ -88,7 +116,7 @@ function ResultsScreen({ socket, participantData }) {
               </div>
               <div className="performer-name">
                 {performer.name}
-                {performer.name === participantData.name && <span className="you-tag">You</span>}
+                {performer.name === participantData.name && <span className="you-tag"> (You)</span>}
               </div>
               <div className="performer-score">{performer.score} pts</div>
             </div>
@@ -97,14 +125,14 @@ function ResultsScreen({ socket, participantData }) {
       </div>
       
       <div className="overall-stats">
-        <h3>Quiz Statistics</h3>
+        <h3>Summary</h3>
         <div className="stats-row">
-          <div className="stat-box">
+          <div className="stat-box card-glass">
             <div className="stat-icon">👥</div>
             <div className="stat-number">{analytics.totalStudents}</div>
             <div className="stat-text">Students</div>
           </div>
-          <div className="stat-box">
+          <div className="stat-box card-glass">
             <div className="stat-icon">📊</div>
             <div className="stat-number">{Math.round(analytics.averageScore)}</div>
             <div className="stat-text">Avg Score</div>
@@ -113,7 +141,15 @@ function ResultsScreen({ socket, participantData }) {
       </div>
       
       <div className="results-footer">
-        <p>Great job participating!</p>
+        <button 
+          onClick={() => {
+            localStorage.removeItem('quiz-session');
+            window.location.href = '/play';
+          }} 
+          className="play-again-btn"
+        >
+          Join Another Quiz
+        </button>
       </div>
     </div>
   )

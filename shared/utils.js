@@ -124,12 +124,23 @@ export function getScoreDistribution(participants) {
  */
 export function isValidQuestion(question) {
   if (!question.text || typeof question.text !== 'string') return false;
-  if (!question.type || !['MULTIPLE_CHOICE', 'BUZZER', 'TRUE_FALSE'].includes(question.type)) return false;
-  if (!Array.isArray(question.options) || question.options.length < 2) return false;
-  if (!question.correctAnswer || !question.options.includes(question.correctAnswer)) return false;
+  
+  const validTypes = ['MULTIPLE_CHOICE', 'BUZZER', 'TRUE_FALSE', 'SHORT_ANSWER'];
+  if (!question.type || !validTypes.includes(question.type)) return false;
+  
+  // SHORT_ANSWER doesn't require options
+  if (question.type !== 'SHORT_ANSWER') {
+    if (!Array.isArray(question.options) || question.options.length < 2) return false;
+    if (!question.correctAnswer || !question.options.includes(question.correctAnswer)) return false;
+  } else {
+    // SHORT_ANSWER requires a correctAnswer but options can be empty
+    if (!question.correctAnswer) return false;
+  }
+  
   if (typeof question.points !== 'number' || question.points < 0) return false;
   if (typeof question.negativePoints !== 'number' || question.negativePoints < 0) return false;
   if (typeof question.timeLimit !== 'number' || question.timeLimit < 5) return false;
+  if (question.readingTime !== undefined && (typeof question.readingTime !== 'number' || question.readingTime < 0)) return false;
   
   return true;
 }

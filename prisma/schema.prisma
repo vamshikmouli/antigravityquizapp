@@ -23,6 +23,9 @@ model Question {
   negativePoints Int      @default(25)
   timeLimit      Int      @default(30) // seconds
   round          Int      @default(1)
+  imageUrl       String?  // Image for the question
+  optionImages   String[] // Images for options (MCQ/Buzzer)
+  readingTime    Int      @default(0)  // Seconds to wait before buzzer activates
   musicFile      String?
   category       String?
   createdAt      DateTime @default(now())

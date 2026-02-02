@@ -130,3 +130,59 @@ export async function deleteQuiz(req, res) {
     res.status(500).json({ error: 'Failed to delete quiz' });
   }
 }
+
+/**
+ * Import questions from another quiz
+ */
+export async function importQuestionsFromQuiz(req, res) {
+  try {
+    const { id: targetQuizId } = req.params;
+    const { sourceQuizId } = req.body;
+
+    if (!sourceQuizId) {
+      return res.status(400).json({ error: 'Source quiz ID is required' });
+    }
+
+    // 1. Verify target quiz ownership
+    const targetQuiz = await prisma.quiz.findFirst({
+      where: { id: targetQuizId, ownerId: req.user.id }
+    });
+
+    if (!targetQuiz) {
+      return res.status(404).json({ error: 'Target quiz not found or unauthorized' });
+    }
+
+    // 2. Fetch source questions
+    const sourceQuestions = await prisma.question.findMany({
+      where: { quizId: sourceQuizId }
+    });
+
+    if (sourceQuestions.length === 0) {
+      return res.status(400).json({ error: 'Source quiz has no questions' });
+    }
+
+    // 3. Prepare duplicated questions (stripping IDs)
+    const newQuestions = sourceQuestions.map(q => {
+      const { id, createdAt, updatedAt, ...rest } = q;
+      return {
+        ...rest,
+        quizId: targetQuizId,
+        ownerId: req.user.id // Ensure ownership
+      };
+    });
+
+    // 4. Bulk create
+    const result = await prisma.question.createMany({
+      data: newQuestions
+    });
+
+    res.json({ 
+      message: `Successfully imported ${result.count} questions`,
+      count: result.count 
+    });
+  } catch (error) {
+    console.error('Import from quiz error:', error);
+    res.status(500).json({ error: 'Failed to import questions' });
+  }
+}
+

@@ -17,8 +17,11 @@ import * as scoringController from './controllers/scoringController.js';
 import * as analyticsController from './controllers/analyticsController.js';
 import * as authController from './controllers/authController.js';
 import * as quizController from './controllers/quizController.js';
+import * as importController from './controllers/importController.js';
 import { authenticateToken } from './middleware/authMiddleware.js';
 import { getBuzzerManager, removeBuzzerManager } from './controllers/buzzerController.js';
+import multer from 'multer';
+import fs from 'fs';
 
 // Import constants
 import { SOCKET_EVENTS, SESSION_STATUS, QUESTION_TYPES } from './shared/constants.js';
@@ -47,6 +50,47 @@ const io = new Server(httpServer, {
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 3000;
 
+// Configure Multer for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = 'uploads/';
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({ 
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only images are allowed'));
+    }
+  }
+});
+
+// Create a separate upload instance for Excel/CSV files
+const excelUpload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit for docs
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ext === '.xlsx' || ext === '.xls' || ext === '.csv') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only Excel (.xlsx, .xls) and CSV files are allowed'));
+    }
+  }
+});
+
 // Middleware
 app.use(cors({
   origin: allowedOrigins,
@@ -72,10 +116,51 @@ app.get('/api/quizzes/:id', authenticateToken, quizController.getQuiz);
 app.post('/api/quizzes', authenticateToken, quizController.createQuiz);
 app.put('/api/quizzes/:id', authenticateToken, quizController.updateQuiz);
 app.delete('/api/quizzes/:id', authenticateToken, quizController.deleteQuiz);
+app.post('/api/quizzes/:id/import-questions', authenticateToken, quizController.importQuestionsFromQuiz);
+
+// Bulk Import Routes
+app.post('/api/questions/import', authenticateToken, excelUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    
+    const { quizId } = req.body;
+    const sanitizedQuizId = (quizId === 'null' || quizId === 'undefined') ? null : quizId;
+    
+    const result = await importController.importQuestions(req.file.path, req.user.id, sanitizedQuizId);
+    
+    // Clean up uploaded file
+    fs.unlinkSync(req.file.path);
+    
+    res.json(result);
+  } catch (error) {
+    console.error('Import error:', error);
+    if (req.file) fs.unlinkSync(req.file.path);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Serve uploads directory
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// File Upload Route
+app.post('/api/upload', authenticateToken, upload.single('image'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    const imageUrl = `/uploads/${req.file.filename}`;
+    res.json({ imageUrl });
+  } catch (error) {
+    console.error('Upload error:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Session routes
@@ -269,10 +354,9 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
   // ========================================
   // SESSION MANAGEMENT
   // ========================================
-  
   socket.on(SOCKET_EVENTS.JOIN_SESSION, async (data) => {
     try {
-      const { code, name, role } = data; // role: 'host', 'student', 'display'
+      const { code, name, role, participantId } = data; // role: 'host', 'student', 'display'
       
       // Get session
       const session = await sessionController.getSessionByCode(code);
@@ -283,7 +367,7 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
       }
       
       // Check if session allows late join
-      if (session.status === SESSION_STATUS.ACTIVE && !session.allowLateJoin && role === 'student') {
+      if (session.status === SESSION_STATUS.ACTIVE && !session.allowLateJoin && role === 'student' && !participantId) {
         socket.emit(SOCKET_EVENTS.ERROR, { message: 'Session has already started' });
         return;
       }
@@ -294,35 +378,76 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
       socket.data.sessionId = session.id;
       socket.data.role = role;
       
-      // If student, create participant record
+      // If student, create or resume participant record
       if (role === 'student') {
         try {
-          const sanitizedName = sanitizeStudentName(name);
-          const participant = await sessionController.addParticipant(session.id, sanitizedName);
+          let participant;
+          
+          if (participantId) {
+            // Try rejoining with existing ID
+            participant = await sessionController.getParticipantById(participantId);
+            
+            // Verify participant belongs to this session
+            if (!participant || participant.sessionId !== session.id) {
+               // Fallback to name-based join if ID is invalid
+               participant = null;
+            }
+          }
+          
+          if (!participant) {
+            const sanitizedName = sanitizeStudentName(name);
+            participant = await sessionController.addParticipant(session.id, sanitizedName);
+            
+            // Notify everyone that a new participant joined
+            io.to(session.code).emit(SOCKET_EVENTS.PARTICIPANT_JOINED, {
+              participant: {
+                id: participant.id,
+                name: participant.name,
+                score: participant.score
+              }
+            });
+          }
           
           socket.data.participantId = participant.id;
           socket.data.participantName = participant.name;
           
-          // Notify everyone that a new participant joined
-          io.to(session.code).emit(SOCKET_EVENTS.PARTICIPANT_JOINED, {
-            participant: {
-              id: participant.id,
-              name: participant.name,
-              score: participant.score
-            }
-          });
+          // Prepare rejoin data if session is active
+          let currentGameState = null;
+          if (session.status === SESSION_STATUS.ACTIVE && activeSessions.has(session.code)) {
+            const sessionData = activeSessions.get(session.code);
+            const currentQ = sessionData.currentQuestion;
+            
+            // Check if already answered
+            const answer = participant.answers?.find(a => a.questionId === currentQ.id);
+            
+            currentGameState = {
+              question: currentQ,
+              startTime: sessionData.startTime,
+              hasAnswered: !!answer,
+              lastAnswerResult: answer ? {
+                isCorrect: answer.isCorrect,
+                points: answer.points,
+                // We don't send correctAnswer here for security, 
+                // client can wait for SHOW_RESULTS or we can send it if isCorrect is false
+                correctAnswer: answer.isCorrect ? null : 'Answered' 
+              } : null
+            };
+          }
           
           // Send confirmation to student
           socket.emit(SOCKET_EVENTS.SESSION_JOINED, {
             session: {
               id: session.id,
               code: session.code,
-              status: session.status
+              status: session.status,
+              currentQuestionIndex: session.currentQuestionIndex
             },
             participant: {
               id: participant.id,
-              name: participant.name
-            }
+              name: participant.name,
+              score: participant.score
+            },
+            currentGameState
           });
         } catch (error) {
           socket.emit(SOCKET_EVENTS.ERROR, { message: error.message });
@@ -336,7 +461,9 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
             code: session.code,
             status: session.status,
             currentQuestionIndex: session.currentQuestionIndex
-          }
+          },
+          // Send current question if active
+          currentGameState: activeSessions.get(session.code) || null
         });
       }
       
@@ -444,28 +571,54 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
         text: question.text,
         type: question.type,
         options: question.options,
+        optionImages: question.optionImages,
+        imageUrl: question.imageUrl,
         points: question.points,
         negativePoints: question.negativePoints,
         timeLimit: question.timeLimit,
+        readingTime: question.readingTime || 0,
         round: question.round,
         questionNumber: nextIndex + 1,
         totalQuestions: session.questions.length
       };
       
+      const startTime = Date.now();
+      
+      // Update local cache for rejoining players
+      activeSessions.set(sessionCode, {
+        currentQuestion: questionData,
+        startTime
+      });
+
       // Send question to all clients
       io.to(sessionCode).emit(SOCKET_EVENTS.QUESTION_STARTED, {
         question: questionData,
-        startTime: Date.now()
+        startTime
       });
       
-      // If buzzer question, activate buzzer
+      // If buzzer question, activate buzzer after readingTime
       if (question.type === QUESTION_TYPES.BUZZER) {
         const buzzerManager = getBuzzerManager(sessionId);
-        buzzerManager.activate();
         
-        io.to(sessionCode).emit(SOCKET_EVENTS.BUZZER_ACTIVATED, {
-          questionId: question.id
-        });
+        if (question.readingTime > 0) {
+          // Deactivate initially if it was somehow active
+          buzzerManager.deactivate(); 
+          
+          setTimeout(() => {
+            // Check if we are still on the same question (index hasn't changed)
+            // This is a bit tricky with current structure, but let's assume it's fine for now
+            // Or better, we can re-fetch session if needed, but usually it works.
+            buzzerManager.activate();
+            io.to(sessionCode).emit(SOCKET_EVENTS.BUZZER_ACTIVATED, {
+              questionId: question.id
+            });
+          }, question.readingTime * 1000);
+        } else {
+          buzzerManager.activate();
+          io.to(sessionCode).emit(SOCKET_EVENTS.BUZZER_ACTIVATED, {
+            questionId: question.id
+          });
+        }
       }
       
     } catch (error) {
@@ -560,11 +713,28 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
         analytics
       });
       
+      // Clean up session cache
+      activeSessions.delete(sessionCode);
+      
       console.log(`[Quiz] Results broadcasted to ${sessionCode}`);
       
     } catch (error) {
       console.error('Error ending quiz:', error);
       socket.emit(SOCKET_EVENTS.ERROR, { message: 'Failed to end quiz' });
+    }
+  });
+
+  socket.on('get-analytics', async (data, callback) => {
+    try {
+      const { sessionId } = socket.data;
+      if (!sessionId) return;
+
+      const analytics = await analyticsController.getAnalytics(sessionId);
+      if (analytics && typeof callback === 'function') {
+        callback({ analytics });
+      }
+    } catch (error) {
+      console.error('Error in get-analytics:', error);
     }
   });
   
@@ -711,6 +881,9 @@ app.use('/play/assets', express.static(path.join(mobileDistPath, 'assets')));
 // 2. Explicitly serve root assets (for the TV screen / Admin)
 // Requests for /assets/... will be served from client-tv/dist/assets
 app.use('/assets', express.static(path.join(tvDistPath, 'assets')));
+
+// 2.5 Serve templates
+app.use('/templates', express.static(path.join(__dirname, 'public', 'templates')));
 
 // 3. Serve the Student Play screen at /play
 app.get('/play', (req, res) => {

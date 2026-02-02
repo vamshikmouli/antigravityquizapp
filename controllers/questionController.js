@@ -172,7 +172,9 @@ export async function createSampleQuestions() {
       negativePoints: 25,
       timeLimit: 30,
       round: 1,
-      category: 'Geography'
+      category: 'Geography',
+      imageUrl: '/uploads/paris.jpg',
+      optionImages: []
     },
     {
       text: 'Which planet is known as the Red Planet?',
@@ -183,7 +185,9 @@ export async function createSampleQuestions() {
       negativePoints: 30,
       timeLimit: 20,
       round: 1,
-      category: 'Science'
+      category: 'Science',
+      imageUrl: '',
+      optionImages: []
     },
     {
       text: 'What is 2 + 2?',
@@ -194,7 +198,9 @@ export async function createSampleQuestions() {
       negativePoints: 10,
       timeLimit: 15,
       round: 1,
-      category: 'Math'
+      category: 'Math',
+      imageUrl: '',
+      optionImages: []
     },
     {
       text: 'The Earth is flat.',
@@ -205,7 +211,9 @@ export async function createSampleQuestions() {
       negativePoints: 15,
       timeLimit: 20,
       round: 1,
-      category: 'Science'
+      category: 'Science',
+      imageUrl: '',
+      optionImages: []
     },
     {
       text: 'Who wrote "Romeo and Juliet"?',
@@ -216,7 +224,9 @@ export async function createSampleQuestions() {
       negativePoints: 40,
       timeLimit: 25,
       round: 2,
-      category: 'Literature'
+      category: 'Literature',
+      imageUrl: '',
+      optionImages: []
     }
   ];
   

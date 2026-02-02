@@ -140,6 +140,25 @@ export async function addParticipant(sessionId, name) {
 }
 
 /**
+ * Get participant by ID
+ */
+export async function getParticipantById(id) {
+  try {
+    const participant = await prisma.participant.findUnique({
+      where: { id },
+      include: {
+        answers: true
+      }
+    });
+    
+    return participant;
+  } catch (error) {
+    console.error('Error getting participant:', error);
+    throw new Error('Failed to get participant');
+  }
+}
+
+/**
  * Remove participant from session
  */
 export async function removeParticipant(participantId) {
