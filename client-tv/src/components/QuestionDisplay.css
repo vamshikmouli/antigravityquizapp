@@ -387,3 +387,49 @@
   display: flex;
   gap: 20px;
 }
+
+/* Music Controls Mini */
+.music-controls-mini {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 5px 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  margin-left: 20px;
+}
+
+.music-toggle-btn {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s;
+}
+
+.music-toggle-btn:hover {
+  transform: scale(1.1);
+}
+
+.music-volume-slider {
+  width: 100px;
+  cursor: pointer;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  outline: none;
+}
+
+.music-volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  background: var(--color-primary);
+  border-radius: 50%;
+  cursor: pointer;
+}

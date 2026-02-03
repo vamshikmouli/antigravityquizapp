@@ -62,9 +62,10 @@ model User {
   name      String?
   createdAt DateTime @default(now())
   
-  quizzes   Quiz[]
-  questions Question[]
-  sessions  Session[]
+  quizzes     Quiz[]
+  questions   Question[]
+  sessions    Session[]
+  musicTracks MusicTrack[]
 }
 
 model Session {
@@ -79,6 +80,7 @@ model Session {
   currentQuestionIndex Int      @default(0)
   status               SessionStatus @default(WAITING)
   musicEnabled         Boolean  @default(true)
+  musicVolume          Float    @default(0.5)
   showLiveResults      Boolean  @default(true)
   allowLateJoin        Boolean  @default(false)
   createdAt            DateTime @default(now())
@@ -95,6 +97,27 @@ enum SessionStatus {
   ACTIVE
   PAUSED
   COMPLETED
+}
+
+enum MusicTrackType {
+  QUESTION
+  OPTIONS
+  ANSWER
+  ROUND_RESULTS
+  FINAL_RESULTS
+}
+
+model MusicTrack {
+  id        String         @id @default(uuid())
+  type      MusicTrackType
+  filename  String
+  url       String
+  ownerId   String
+  owner     User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  
+  @@unique([ownerId, type])
 }
 
 model SessionQuestion {

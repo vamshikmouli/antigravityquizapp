@@ -9,6 +9,8 @@ function CreateSessionPage() {
   const [quizzes, setQuizzes] = useState([]);
   const [selectedQuizId, setSelectedQuizId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [musicEnabled, setMusicEnabled] = useState(true);
+  const [musicVolume, setMusicVolume] = useState(50);
   
   useEffect(() => {
     const fetchQuizzes = async () => {
@@ -40,7 +42,8 @@ function CreateSessionPage() {
         },
         body: JSON.stringify({
           settings: {
-            musicEnabled: true,
+            musicEnabled,
+            musicVolume: musicVolume / 100, // Convert to 0-1 range
             showLiveResults: true
           }
         })
@@ -118,6 +121,73 @@ function CreateSessionPage() {
               </Link>
             </div>
           )}
+        </div>
+
+        <div className="wizard-step" style={{ marginTop: '40px' }}>
+          <h2>Session Settings</h2>
+          <div className="card-glass" style={{ padding: '30px', borderRadius: '24px', marginTop: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+              <div>
+                <h3 style={{ margin: 0 }}>🎵 Background Music</h3>
+                <p style={{ opacity: 0.7, margin: '5px 0 0 0' }}>Play music during the quiz on this screen</p>
+              </div>
+              <label className="switch" style={{ 
+                position: 'relative', 
+                display: 'inline-block', 
+                width: '60px', 
+                height: '34px' 
+              }}>
+                <input 
+                  type="checkbox" 
+                  checked={musicEnabled} 
+                  onChange={(e) => setMusicEnabled(e.target.checked)}
+                  style={{ opacity: 0, width: 0, height: 0 }}
+                />
+                <span style={{
+                  position: 'absolute',
+                  cursor: 'pointer',
+                  top: 0, left: 0, right: 0, bottom: 0,
+                  backgroundColor: musicEnabled ? 'var(--color-primary)' : '#ccc',
+                  transition: '.4s',
+                  borderRadius: '34px'
+                }}>
+                  <span style={{
+                    position: 'absolute',
+                    content: '""',
+                    height: '26px',
+                    width: '26px',
+                    left: '4px',
+                    bottom: '4px',
+                    backgroundColor: 'white',
+                    transition: '.4s',
+                    borderRadius: '50%',
+                    transform: musicEnabled ? 'translateX(26px)' : 'none'
+                  }}></span>
+                </span>
+              </label>
+            </div>
+
+            {musicEnabled && (
+              <div style={{ marginTop: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                  <span>Volume</span>
+                  <span>{musicVolume}%</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="0" 
+                  max="100" 
+                  value={musicVolume} 
+                  onChange={(e) => setMusicVolume(parseInt(e.target.value))}
+                  style={{ width: '100%', cursor: 'pointer' }}
+                />
+              </div>
+            )}
+            
+            <div style={{ marginTop: '20px', padding: '15px', background: 'rgba(255,255,255,0.05)', borderRadius: '12px', fontSize: '0.9rem' }}>
+              <p>💡 Make sure you have uploaded music tracks in the <strong>Music Settings</strong> page from the dashboard.</p>
+            </div>
+          </div>
         </div>
 
         <div className="wizard-actions" style={{ 

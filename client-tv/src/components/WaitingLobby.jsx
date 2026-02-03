@@ -1,8 +1,28 @@
 import { useState, useEffect } from 'react'
 import './WaitingLobby.css'
 
-function WaitingLobby({ socket, sessionData, userRole }) {
+function WaitingLobby({ socket, sessionData, userRole, audioManager }) {
   const [participants, setParticipants] = useState([])
+  const [isAudioLocked, setIsAudioLocked] = useState(true)
+
+  useEffect(() => {
+    if (audioManager) {
+      setIsAudioLocked(!audioManager.isUnlocked);
+    }
+  }, [audioManager]);
+
+  const handleUnlockAudio = async () => {
+    if (audioManager) {
+      const unlocked = await audioManager.unlock();
+      setIsAudioLocked(!unlocked);
+    }
+  };
+
+  const handleStartQuiz = async () => {
+    // Attempt to unlock audio one more time just in case
+    await handleUnlockAudio();
+    socket.emit('start-quiz');
+  };
   
   useEffect(() => {
     if (!socket) return
@@ -72,25 +92,56 @@ function WaitingLobby({ socket, sessionData, userRole }) {
         </div>
         
         {userRole === 'host' ? (
-          <button 
-            className="start-quiz-button"
-            onClick={() => socket.emit('start-quiz')}
-            style={{
-              fontSize: '24px',
-              padding: '16px 32px',
-              background: 'var(--color-success)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '12px',
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
-            }}
-          >
-            ▶ START QUIZ
-          </button>
+          <div style={{ display: 'flex', gap: '20px' }}>
+            {isAudioLocked && sessionData?.musicEnabled && (
+              <button 
+                className="start-quiz-button"
+                onClick={handleUnlockAudio}
+                style={{
+                  background: 'var(--color-primary)',
+                  fontSize: '20px',
+                  padding: '16px 24px'
+                }}
+              >
+                🔊 ENABLE SOUND
+              </button>
+            )}
+            <button 
+              className="start-quiz-button"
+              onClick={handleStartQuiz}
+              style={{
+                fontSize: '24px',
+                padding: '16px 32px',
+                background: 'var(--color-success)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '12px',
+                cursor: 'pointer',
+                fontWeight: 'bold',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+              }}
+            >
+              ▶ START QUIZ
+            </button>
+          </div>
         ) : (
-          <p>Waiting for host to start the quiz...</p>
+          <div>
+            {isAudioLocked && sessionData?.musicEnabled && (
+               <button 
+               className="start-quiz-button"
+               onClick={handleUnlockAudio}
+               style={{
+                 background: 'var(--color-primary)',
+                 fontSize: '18px',
+                 padding: '12px 24px',
+                 marginBottom: '20px'
+               }}
+             >
+               🔊 Enable Sound
+             </button>
+            )}
+            <p>Waiting for host to start the quiz...</p>
+          </div>
         )}
       </div>
     </div>

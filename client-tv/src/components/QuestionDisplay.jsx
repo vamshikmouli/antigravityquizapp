@@ -3,7 +3,7 @@ import Leaderboard from './Leaderboard'
 import FinalResultsDisplay from './FinalResultsDisplay'
 import './QuestionDisplay.css'
 
-function QuestionDisplay({ socket, sessionData, userRole }) {
+function QuestionDisplay({ socket, sessionData, userRole, audioManager }) {
   const [currentQuestion, setCurrentQuestion] = useState(null)
   const [questionStartTime, setQuestionStartTime] = useState(null)
   const [timeRemaining, setTimeRemaining] = useState(0)
@@ -12,12 +12,14 @@ function QuestionDisplay({ socket, sessionData, userRole }) {
   const [showResults, setShowResults] = useState(false)
   const [questionResults, setQuestionResults] = useState(null)
   const [roundResults, setRoundResults] = useState(null)
-  
+
   const timerRef = useRef(null)
-  
+
+
+
   useEffect(() => {
     if (!socket) return
-    
+
     // Question started
     socket.on('question-started', (data) => {
       console.log('TV: question-started', data.question.id);
@@ -28,6 +30,9 @@ function QuestionDisplay({ socket, sessionData, userRole }) {
       setShowResults(false)
       setQuestionResults(null)
       setRoundResults(null) // Clear round results
+
+      // Play music
+      audioManager?.play('QUESTION')
     })
     
     // Buzzer winner
@@ -46,6 +51,9 @@ function QuestionDisplay({ socket, sessionData, userRole }) {
       setQuestionResults(data)
       // Inject correct answer into currentQuestion for highlighting
       setCurrentQuestion(prev => prev ? { ...prev, correctAnswer: data.correctAnswer } : prev)
+
+      // Play music
+      audioManager?.play('ANSWER')
     })
     
     // Round Ended
@@ -53,12 +61,17 @@ function QuestionDisplay({ socket, sessionData, userRole }) {
       setRoundResults(data)
       setLeaderboard(data.leaderboard)
       setShowResults(false)
+
+      // Play music
+      audioManager?.play('ROUND_RESULTS')
     })
 
     // Analytics Ready (End of Quiz)
     socket.on('analytics-ready', (data) => {
       console.log('TV: analytics-ready', data);
-      setFinalAnalytics(data.analytics)
+      
+      // Play music
+      audioManager?.play('FINAL_RESULTS')
     })
 
     // Trigger next question (from server automation)
@@ -85,6 +98,12 @@ function QuestionDisplay({ socket, sessionData, userRole }) {
       const remaining = Math.max(0, currentQuestion.timeLimit - elapsed)
       setTimeRemaining(remaining)
       
+      // Handle music transition from QUESTION to OPTIONS
+      const readingTimePassed = elapsed >= (currentQuestion.readingTime || 0);
+      if (readingTimePassed && audioManager?.currentTrack === audioManager?.tracks?.QUESTION) {
+        audioManager?.play('OPTIONS');
+      }
+
       if (remaining === 0) {
         clearInterval(timerRef.current)
       }
@@ -246,6 +265,7 @@ function QuestionDisplay({ socket, sessionData, userRole }) {
               >
                 End Quiz ⏹️
               </button>
+
             </div>
           )}
 

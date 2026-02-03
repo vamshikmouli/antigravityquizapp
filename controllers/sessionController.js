@@ -26,6 +26,7 @@ export async function createSession(hostId, questionIds, settings = {}) {
         hostId,
         quizId: settings.quizId,
         musicEnabled: settings.musicEnabled ?? true,
+        musicVolume: settings.musicVolume ?? 0.5,
         showLiveResults: settings.showLiveResults ?? true,
         allowLateJoin: settings.allowLateJoin ?? false,
         questions: {
@@ -63,6 +64,11 @@ export async function getSessionByCode(code) {
     const session = await prisma.session.findUnique({
       where: { code },
       include: {
+        host: {
+          select: {
+            musicTracks: true
+          }
+        },
         questions: {
           include: {
             question: true

@@ -18,6 +18,7 @@ import * as analyticsController from './controllers/analyticsController.js';
 import * as authController from './controllers/authController.js';
 import * as quizController from './controllers/quizController.js';
 import * as importController from './controllers/importController.js';
+import * as musicController from './controllers/musicController.js';
 import { authenticateToken } from './middleware/authMiddleware.js';
 import { getBuzzerManager, removeBuzzerManager } from './controllers/buzzerController.js';
 import multer from 'multer';
@@ -91,6 +92,21 @@ const excelUpload = multer({
   }
 });
 
+// Create a separate upload instance for music files
+const musicUpload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit for audio
+  fileFilter: (req, file, cb) => {
+    const allowedMimes = ['audio/mpeg', 'audio/mp3', 'audio/ogg', 'audio/wav', 'audio/x-wav'];
+    if (allowedMimes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only audio files (MP3, OGG, WAV) are allowed'));
+    }
+  }
+});
+
+
 // Middleware
 app.use(cors({
   origin: allowedOrigins,
@@ -117,6 +133,69 @@ app.post('/api/quizzes', authenticateToken, quizController.createQuiz);
 app.put('/api/quizzes/:id', authenticateToken, quizController.updateQuiz);
 app.delete('/api/quizzes/:id', authenticateToken, quizController.deleteQuiz);
 app.post('/api/quizzes/:id/import-questions', authenticateToken, quizController.importQuestionsFromQuiz);
+
+// Music Routes
+app.get('/api/music', authenticateToken, async (req, res) => {
+  try {
+    const tracks = await musicController.getMusicTracks(req.user.id);
+    res.json(tracks);
+  } catch (error) {
+    console.error('Error getting music tracks:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/music/upload', authenticateToken, musicUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const { type } = req.body;
+    if (!type) {
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ error: 'Music type is required' });
+    }
+
+    const validTypes = ['QUESTION', 'OPTIONS', 'ANSWER', 'ROUND_RESULTS', 'FINAL_RESULTS'];
+    if (!validTypes.includes(type)) {
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ error: 'Invalid music type' });
+    }
+
+    const url = `/uploads/${req.file.filename}`;
+    const track = await musicController.upsertMusicTrack(
+      req.user.id,
+      type,
+      req.file.filename,
+      url
+    );
+
+    res.json(track);
+  } catch (error) {
+    console.error('Music upload error:', error);
+    if (req.file) fs.unlinkSync(req.file.path);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/music/:id', authenticateToken, async (req, res) => {
+  try {
+    const track = await musicController.deleteMusicTrack(req.params.id, req.user.id);
+    
+    // Delete the physical file
+    const filePath = path.join(__dirname, track.url);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
+    res.json({ success: true, message: 'Music track deleted' });
+  } catch (error) {
+    console.error('Error deleting music track:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 
 // Bulk Import Routes
 app.post('/api/questions/import', authenticateToken, excelUpload.single('file'), async (req, res) => {
@@ -440,7 +519,10 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
               id: session.id,
               code: session.code,
               status: session.status,
-              currentQuestionIndex: session.currentQuestionIndex
+              currentQuestionIndex: session.currentQuestionIndex,
+              musicEnabled: session.musicEnabled,
+              musicVolume: session.musicVolume,
+              host: session.host
             },
             participant: {
               id: participant.id,
@@ -460,7 +542,10 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
             id: session.id,
             code: session.code,
             status: session.status,
-            currentQuestionIndex: session.currentQuestionIndex
+            currentQuestionIndex: session.currentQuestionIndex,
+            musicEnabled: session.musicEnabled,
+            musicVolume: session.musicVolume,
+            host: session.host
           },
           // Send current question if active
           currentGameState: activeSessions.get(session.code) || null

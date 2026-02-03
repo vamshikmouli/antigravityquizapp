@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import JoinSession from './components/JoinSession'
 import WaitingLobby from './components/WaitingLobby'
@@ -11,8 +11,11 @@ import HostDashboard from './components/HostDashboard'
 import QuestionsPage from './components/QuestionsPage'
 import QuizList from './components/QuizList'
 import CreateSessionPage from './components/CreateSessionPage'
+import MusicSettings from './components/MusicSettings'
+import MusicControls from './components/MusicControls'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { useWebSocket } from './hooks/useWebSocket'
+import AudioManager from './utils/AudioManager'
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -69,12 +72,36 @@ function AppContent() {
   const [finalAnalytics, setFinalAnalytics] = useState(null)
   
   const { socket, connected, error } = useWebSocket()
+  const audioManager = useRef(new AudioManager())
   
   const handleJoinSuccess = (code, session, role = 'display') => {
     setSessionCode(code)
     setSessionData(session)
     setUserRole(role)
   }
+
+  // Initialize Audio
+  useEffect(() => {
+    if (!sessionData?.host?.musicTracks) return
+
+    const tracks = {}
+    if (sessionData.host.musicTracks) {
+      sessionData.host.musicTracks.forEach(track => {
+        tracks[track.type] = track.url
+      })
+      console.log('App: Music tracks found:', Object.keys(tracks));
+    } else {
+      console.log('App: No music tracks in host object');
+    }
+
+    audioManager.current.loadTracks(tracks)
+    audioManager.current.setEnabled(sessionData.musicEnabled)
+    audioManager.current.setVolume(sessionData.musicVolume)
+
+    return () => {
+      audioManager.current.cleanup()
+    }
+  }, [sessionData])
   
   useEffect(() => {
     if (!socket) return
@@ -108,25 +135,28 @@ function AppContent() {
   // If in a session, show session screens
   if (sessionCode) {
     return (
-      <Routes>
-        <Route path="*" element={
-          quizStatus === 'waiting' ? (
-            <WaitingLobby socket={socket} sessionData={sessionData} userRole={userRole} />
-          ) : quizStatus === 'completed' && !finalAnalytics ? (
-            <div className="ending-transition h-screen flex flex-col items-center justify-center p-10 text-center">
-              <div className="spinner mb-8"></div>
-              <h1 className="text-4xl font-extrabold mb-4">Quiz Completed!</h1>
-              <p className="text-xl text-dim">Calculating final rankings and scorecards...</p>
-            </div>
-          ) : (
-            finalAnalytics ? (
-              <FinalResultsDisplay analytics={finalAnalytics} sessionCode={sessionCode} />
+      <>
+        <Routes>
+          <Route path="*" element={
+            quizStatus === 'waiting' ? (
+              <WaitingLobby socket={socket} sessionData={sessionData} userRole={userRole} audioManager={audioManager.current} />
+            ) : quizStatus === 'completed' && !finalAnalytics ? (
+              <div className="ending-transition h-screen flex flex-col items-center justify-center p-10 text-center">
+                <div className="spinner mb-8"></div>
+                <h1 className="text-4xl font-extrabold mb-4">Quiz Completed!</h1>
+                <p className="text-xl text-dim">Calculating final rankings and scorecards...</p>
+              </div>
             ) : (
-              <QuestionDisplay socket={socket} sessionData={sessionData} userRole={userRole} />
+              finalAnalytics ? (
+                <FinalResultsDisplay audioManager={audioManager.current} analytics={finalAnalytics} sessionCode={sessionCode} />
+              ) : (
+                <QuestionDisplay audioManager={audioManager.current} socket={socket} sessionData={sessionData} userRole={userRole} />
+              )
             )
-          )
-        } />
-      </Routes>
+          } />
+        </Routes>
+        <MusicControls audioManager={audioManager.current} sessionData={sessionData} />
+      </>
     );
   }
 
@@ -178,6 +208,7 @@ function AppContent() {
         <Route path="/quizzes" element={<ProtectedRoute><QuizList /></ProtectedRoute>} />
         <Route path="/quizzes/:quizId" element={<ProtectedRoute><QuestionsPage /></ProtectedRoute>} />
         <Route path="/create-session" element={<ProtectedRoute><CreateSessionPage /></ProtectedRoute>} />
+        <Route path="/music-settings" element={<ProtectedRoute><MusicSettings /></ProtectedRoute>} />
         
         {/* Helper to connect host after creating session */}
         <Route path="/lobby-connect" element={<LobbyConnect socket={socket} onJoinSuccess={handleJoinSuccess} />} />

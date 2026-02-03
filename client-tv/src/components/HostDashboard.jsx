@@ -64,6 +64,28 @@ function HostDashboard() {
             <button className="join-button-tv" style={{ width: '100%', fontSize: '1.5rem', background: 'var(--grad-success)' }}>Create New Session</button>
           </Link>
         </div>
+
+        <div className="card-glass" style={{ 
+          padding: '50px', 
+          borderRadius: '32px', 
+          border: '1px solid rgba(255,255,255,0.1)',
+          background: 'rgba(255,255,255,0.03)',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          minHeight: '350px'
+        }}>
+          <div>
+            <span style={{ fontSize: '64px', display: 'block', marginBottom: '20px' }}>🎵</span>
+            <h2 style={{ fontSize: '2.5rem', marginBottom: '20px' }}>Music Settings</h2>
+            <p style={{ fontSize: '1.2rem', marginBottom: '40px', opacity: 0.7, lineHeight: 1.6 }}>
+              Upload and manage background music for different stages of your quiz.
+            </p>
+          </div>
+          <Link to="/music-settings">
+            <button className="join-button-tv" style={{ width: '100%', fontSize: '1.5rem', background: 'var(--grad-primary)' }}>Manage Music</button>
+          </Link>
+        </div>
       </div>
     </div>
   );

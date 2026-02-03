@@ -1,8 +1,14 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import ResultsTable from './ResultsTable';
 import './FinalResultsDisplay.css';
 
-const FinalResultsDisplay = ({ analytics, sessionCode }) => {
+const FinalResultsDisplay = ({ analytics, sessionCode, audioManager }) => {
+  useEffect(() => {
+    if (audioManager) {
+      audioManager.play('FINAL_RESULTS');
+    }
+  }, [audioManager]);
+
   const { detailedResults, totalStudents, averageScore } = analytics;
   const winners = detailedResults.slice(0, 3);
 
