@@ -60,7 +60,7 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null }
           ...prev, 
           type: value,
           options: [],
-          correctAnswer: (value === 'ORAL_BUZZER' || value === 'ORAL_OPEN') ? 'Oral' : '' 
+          correctAnswer: '' 
         }));
       } else {
         // MCQ or BUZZER
@@ -282,6 +282,20 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null }
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Explicit Correct Answer for Short Answer, Buzzer, or Oral types */}
+            {(formData.type === 'SHORT_ANSWER' || formData.type === 'BUZZER' || formData.type === 'ORAL_BUZZER' || formData.type === 'ORAL_OPEN') && (
+              <div className="form-group" style={{ marginTop: '20px' }}>
+                <label>Correct Answer {formData.type === 'BUZZER' ? '(Auto-filled from options)' : '(Exact Match)'}</label>
+                <input 
+                  type="text" 
+                  value={formData.correctAnswer}
+                  onChange={(e) => handleChange('correctAnswer', e.target.value)}
+                  className="modern-input"
+                  placeholder={formData.type === 'BUZZER' ? "Select an option or type here" : "e.g. Paris"}
+                />
               </div>
             )}
 

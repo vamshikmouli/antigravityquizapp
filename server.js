@@ -935,11 +935,15 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
         return;
       }
 
-      // Submit "Oral" as the correct answer
+      // Get the question to get the REAL correct answer
+      const question = await questionController.getQuestionById(questionId);
+      const correctAnswer = question?.correctAnswer || 'Oral';
+
+      // Submit the real correct answer
       const result = await scoringController.submitAnswer(
         participantId,
         questionId,
-        'Oral'
+        correctAnswer
       );
 
       // Clear buzzer timeout
@@ -961,7 +965,7 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
 
       // Notify everyone results are ready (to update TV/Host view)
       io.to(sessionCode).emit(SOCKET_EVENTS.SHOW_RESULTS, {
-        correctAnswer: 'Oral',
+        correctAnswer: result.correctAnswer,
         correctCount: 1,
         incorrectCount: 0,
         correctNames: [studentSocket?.data?.participantName || 'Student'],
@@ -993,6 +997,9 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
         return;
       }
 
+      // Get the question
+      const question = await questionController.getQuestionById(questionId);
+
       // Submit something else to get "Incorrect"
       const result = await scoringController.submitAnswer(
         participantId,
@@ -1015,13 +1022,13 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
         studentSocket.emit(SOCKET_EVENTS.ANSWER_RECEIVED, {
             isCorrect: false,
             points: result.points,
-            correctAnswer: 'Oral'
+            correctAnswer: result.correctAnswer
         });
       }
 
       // Notify everyone results are ready
       io.to(sessionCode).emit(SOCKET_EVENTS.SHOW_RESULTS, {
-        correctAnswer: 'Oral',
+        correctAnswer: result.correctAnswer,
         correctCount: 0,
         incorrectCount: 1,
         correctNames: [],
@@ -1066,11 +1073,15 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
         return;
       }
 
-      // Submit "Oral" for correct, or something else for wrong
+      // Get the question
+      const question = await questionController.getQuestionById(questionId);
+      const correctAnswer = question?.correctAnswer || 'Oral';
+
+      // Submit the real answer for correct, or something else for wrong
       const result = await scoringController.submitAnswer(
         participantId,
         questionId,
-        isCorrect ? 'Oral' : 'Incorrect_Oral_Answer'
+        isCorrect ? correctAnswer : 'Incorrect_Oral_Answer'
       );
 
       // Notify the specific student
@@ -1082,13 +1093,13 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
         studentSocket.emit(SOCKET_EVENTS.ANSWER_RECEIVED, {
             isCorrect,
             points: result.points,
-            correctAnswer: 'Oral'
+            correctAnswer: result.correctAnswer
         });
       }
 
       // Notify everyone results for this specific pick
       io.to(sessionCode).emit(SOCKET_EVENTS.SHOW_RESULTS, {
-        correctAnswer: 'Oral',
+        correctAnswer: result.correctAnswer,
         correctCount: isCorrect ? 1 : 0,
         incorrectCount: isCorrect ? 0 : 1,
         correctNames: isCorrect ? [studentSocket?.data?.participantName || 'Student'] : [],

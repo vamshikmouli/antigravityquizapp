@@ -283,6 +283,16 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager }) {
             )}
             <h2 className="question-text-tv">{currentQuestion.text}</h2>
           </div>
+
+          {/* Explicit Correct Answer Reveal */}
+          {showResults && (currentQuestion.type === 'SHORT_ANSWER' || currentQuestion.type === 'BUZZER' || currentQuestion.type === 'TRUE_FALSE' || currentQuestion.type === 'ORAL_BUZZER' || currentQuestion.type === 'ORAL_OPEN') && (
+            <div className="revealed-answer-container fade-in">
+              <div className="revealed-answer-label">CORRECT ANSWER</div>
+              <div className="revealed-answer-box">
+                {currentQuestion.correctAnswer || 'N/A'}
+              </div>
+            </div>
+          )}
           
           {/* Buzzer Winner Display */}
           {buzzerWinner && (
