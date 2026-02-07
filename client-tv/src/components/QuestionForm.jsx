@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import Select from './common/Select';
 import './QuestionManager.css';
 
 const QUESTION_TYPES = {
@@ -10,6 +11,16 @@ const QUESTION_TYPES = {
   TRUE_FALSE: 'TRUE_FALSE',
   SHORT_ANSWER: 'SHORT_ANSWER'
 };
+
+const TYPE_OPTIONS = [
+  { value: 'MULTIPLE_CHOICE', label: 'Poll (Multiple Choice)', icon: '📊' },
+  { value: 'BUZZER', label: 'Fastest Finger (Buzzer with Options)', icon: '⚡' },
+  { value: 'ORAL_BUZZER', label: 'Shout (Oral Buzzer)', icon: '📢' },
+  { value: 'ORAL_OPEN', label: 'Spotlight (Host Picks)', icon: '🔦' },
+  { value: 'TRUE_FALSE', label: 'True / False', icon: '⚖️' },
+  { value: 'SHORT_ANSWER', label: 'Short Answer', icon: '📝' }
+];
+
 
 function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null }) {
   const { token } = useAuth();
@@ -30,6 +41,7 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null }
   const [uploading, setUploading] = useState({ question: false, options: [] });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+
 
   const handleChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -167,21 +179,14 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null }
             {/* Row 1: Type and Round */}
             <div className="form-row">
               <div className="form-group half">
-                <label>Question Type</label>
-                <div className="select-wrapper">
-                  <select 
-                    value={formData.type} 
-                    onChange={(e) => handleChange('type', e.target.value)}
-                  >
-                    <option value="MULTIPLE_CHOICE">Poll (Multiple Choice)</option>
-                    <option value="BUZZER">Fastest Finger (Buzzer with Options)</option>
-                    <option value="ORAL_BUZZER">Shout (Oral Buzzer)</option>
-                    <option value="ORAL_OPEN">Spotlight (Host Picks)</option>
-                    <option value="TRUE_FALSE">True / False</option>
-                    <option value="SHORT_ANSWER">Short Answer</option>
-                  </select>
-                </div>
+                <Select 
+                  label="Question Type"
+                  options={TYPE_OPTIONS}
+                  value={formData.type}
+                  onChange={(val) => handleChange('type', val)}
+                />
               </div>
+
               
               <div className="form-group half">
                 <label>Round Number</label>

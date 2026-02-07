@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import QuestionForm from './QuestionForm';
+import Select from './common/Select';
 import { useParams, Link } from 'react-router-dom';
 import './QuestionManager.css';
 
@@ -13,6 +14,7 @@ function QuestionsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState(null);
   const [selectedRound, setSelectedRound] = useState('All');
+  const [selectedType, setSelectedType] = useState('All');
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef(null);
 
@@ -21,6 +23,8 @@ function QuestionsPage() {
   const [availableQuizzes, setAvailableQuizzes] = useState([]);
   const [selectedSourceQuiz, setSelectedSourceQuiz] = useState(null);
   const [loadingQuizzes, setLoadingQuizzes] = useState(false);
+  const [showKebabMenu, setShowKebabMenu] = useState(false);
+  const kebabRef = useRef(null);
 
   const fetchQuizData = async () => {
     try {
@@ -65,6 +69,15 @@ function QuestionsPage() {
     if (quizId && token) {
       fetchQuizData();
     }
+
+    const handleClickOutside = (event) => {
+      if (kebabRef.current && !kebabRef.current.contains(event.target)) {
+        setShowKebabMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [quizId, token]);
 
   const handleDelete = async (id) => {
@@ -150,9 +163,12 @@ function QuestionsPage() {
   };
 
   const rounds = ['All', ...new Set(questions.map(q => q.round))].sort((a,b) => a - b);
-  const filteredQuestions = selectedRound === 'All' 
-    ? questions 
-    : questions.filter(q => q.round === selectedRound);
+  
+  const filteredQuestions = questions.filter(q => {
+    const roundMatch = selectedRound === 'All' || q.round === selectedRound;
+    const typeMatch = selectedType === 'All' || q.type === selectedType;
+    return roundMatch && typeMatch;
+  });
 
   return (
     <div className="dashboard-container">
@@ -162,20 +178,48 @@ function QuestionsPage() {
           <h1 style={{ marginBottom: '8px' }}>{quiz?.title || 'Quiz Details'}</h1>
         </div>
         <div className="header-actions">
-          <button 
-            onClick={() => { fetchAvailableQuizzes(); setShowImportModal(true); }} 
-            className="add-btn" 
-            style={{ background: 'rgba(99, 102, 241, 0.2)', color: '#6366f1', border: '1px solid #6366f1', marginLeft: '10px' }}
-          >
-            🔗 Import from Quiz
-          </button>
-
-          <a href="/templates/sample_questions.xlsx" download className="back-link" style={{ marginLeft: '10px' }}>
-            📥 Sample Template
-          </a>
-          <button onClick={() => fileInputRef.current?.click()} className="add-btn" style={{ background: 'var(--color-success)', marginLeft: '10px' }} disabled={importing}>
-            {importing ? 'Importing...' : '📁 Bulk Import'}
-          </button>
+          <div className="kebab-menu-container" ref={kebabRef}>
+            <button 
+              className="kebab-btn" 
+              onClick={() => setShowKebabMenu(!showKebabMenu)}
+              title="More Actions"
+            >
+              ⋮
+            </button>
+            
+            {showKebabMenu && (
+              <div className="kebab-dropdown fade-in">
+                <button 
+                  onClick={() => { setEditingQuestion(null); setShowForm(true); setShowKebabMenu(false); }} 
+                  className="dropdown-item"
+                >
+                  <span>➕</span> Add Question
+                </button>
+                
+                <button 
+                  onClick={() => { fetchAvailableQuizzes(); setShowImportModal(true); setShowKebabMenu(false); }} 
+                  className="dropdown-item"
+                >
+                  <span>🔗</span> Import from Quiz
+                </button>
+                
+                <div className="dropdown-divider"></div>
+                
+                <a href="/templates/sample_questions.xlsx" download className="dropdown-item" onClick={() => setShowKebabMenu(false)}>
+                  <span>📥</span> Sample Template
+                </a>
+                
+                <button 
+                  onClick={() => { fileInputRef.current?.click(); setShowKebabMenu(false); }} 
+                  className="dropdown-item"
+                  disabled={importing}
+                >
+                  <span>📁</span> {importing ? 'Importing...' : 'Bulk Import'}
+                </button>
+              </div>
+            )}
+          </div>
+          
           <input 
             type="file" 
             ref={fileInputRef} 
@@ -183,20 +227,39 @@ function QuestionsPage() {
             style={{ display: 'none' }}
             accept=".xlsx,.xls,.csv"
           />
-          <button onClick={() => { setEditingQuestion(null); setShowForm(true); }} className="add-btn" style={{ marginLeft: '10px' }}>
-            + Add Question
-          </button>
         </div>
       </header>
 
-      <div className="filters">
-        <label>Filter by Round:</label>
-        <select value={selectedRound} onChange={(e) => setSelectedRound(e.target.value === 'All' ? 'All' : parseInt(e.target.value))}>
-          {rounds.map(r => (
-            <option key={r} value={r}>{r === 'All' ? 'All Rounds' : `Round ${r}`}</option>
-          ))}
-        </select>
+      <div className="filters" style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '25px' }}>
+        <Select 
+          label="Filter by Round"
+          options={rounds.map(r => ({
+            value: r,
+            label: r === 'All' ? 'All Rounds' : `Round ${r}`,
+            icon: r === 'All' ? '🌐' : '🎯'
+          }))}
+          value={selectedRound}
+          onChange={(val) => setSelectedRound(val === 'All' ? 'All' : parseInt(val))}
+          small
+        />
+
+        <Select 
+          label="Filter by Type"
+          options={[
+            { value: 'All', label: 'All Types', icon: '📁' },
+            { value: 'MULTIPLE_CHOICE', label: 'Poll', icon: '📊' },
+            { value: 'BUZZER', label: 'Buzzer', icon: '⚡' },
+            { value: 'ORAL_BUZZER', label: 'Shout', icon: '📢' },
+            { value: 'ORAL_OPEN', label: 'Spotlight', icon: '🔦' },
+            { value: 'TRUE_FALSE', label: 'True/False', icon: '⚖️' },
+            { value: 'SHORT_ANSWER', label: 'Short Answer', icon: '📝' }
+          ]}
+          value={selectedType}
+          onChange={(val) => setSelectedType(val)}
+          small
+        />
       </div>
+
 
       {loading ? <div className="spinner"></div> : (
         <div className="questions-list">

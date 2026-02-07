@@ -36,27 +36,31 @@
 }
 
 .dashboard-container {
-  padding: 40px;
-  max-width: 1200px;
-  margin: 0 auto;
+  padding: 20px 40px 100px 40px;
+  width: 100%;
+  max-width: none;
+  margin: 0;
   color: var(--text-main);
-  padding-bottom: 100px;
+  box-sizing: border-box;
 }
 
 .dashboard-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 40px;
+  margin-bottom: 30px;
   background: rgba(255,255,255,0.03);
-  padding: 20px 30px;
+  padding: 15px 25px;
   border-radius: 16px;
   border: 1px solid rgba(255,255,255,0.05);
   backdrop-filter: blur(10px);
+  position: sticky;
+  top: 20px;
+  z-index: 100;
 }
 
 .dashboard-header h1 {
-  font-size: 2rem;
+  font-size: 1.6rem;
   margin: 0;
   background: linear-gradient(135deg, #FF6B6B 0%, #FFD93D 100%);
   -webkit-background-clip: text;
@@ -70,6 +74,96 @@
   display: flex;
   gap: 15px;
   align-items: center;
+  position: relative;
+}
+
+/* Kebab Menu Styles */
+.kebab-menu-container {
+  position: relative;
+}
+
+.kebab-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: white;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding-bottom: 4px; /* Align visual center of ⋮ */
+}
+
+.kebab-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--color-primary);
+  transform: scale(1.05);
+}
+
+.kebab-dropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  background: #1a1a24; /* More solid background for readability */
+  border: 1px solid rgba(255, 255, 255, 0.15); /* More prominent border */
+  border-radius: 16px;
+  width: 260px; /* Slightly wider */
+  padding: 10px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  animation: dropdownFade 0.2s ease-out;
+}
+
+@keyframes dropdownFade {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+
+.dropdown-item {
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  padding: 14px 18px; /* More padding for better hit target */
+  text-align: left;
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 1rem; /* Larger font */
+  font-weight: 600; /* Bolder font */
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  text-decoration: none;
+}
+
+
+.dropdown-item span {
+  font-size: 1.1rem;
+}
+
+.dropdown-item:hover {
+  background: rgba(99, 102, 241, 0.15); /* Primary color background on hover */
+  color: var(--color-primary);
+  padding-left: 22px;
+}
+
+
+.dropdown-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dropdown-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.05);
+  margin: 6px 8px;
 }
 
 .back-link {
@@ -116,12 +210,13 @@
 .questions-list {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 12px;
+  /* Ensure it takes full width and handles overflow if needed in parent */
 }
 
 .question-item {
   background: var(--bg-card);
-  padding: 25px;
+  padding: 15px 20px;
   border-radius: var(--border-radius);
   display: flex;
   justify-content: space-between;
@@ -187,7 +282,13 @@
 
 .q-details {
   color: var(--text-muted);
-  font-size: 0.9rem;
+  font-size: 0.85rem;
+  margin-top: 4px;
+}
+
+.q-info h3 {
+  font-size: 1.2rem;
+  margin: 5px 0;
 }
 
 .q-actions button {
@@ -199,15 +300,56 @@
   transition: background 0.2s;
 }
 
-.q-actions button:first-child {
-  background: rgba(255,255,255,0.1);
-  color: white;
-  margin-right: 10px;
+.q-actions button:last-child {
+  margin-left: 10px;
 }
 
-.q-actions button:first-child:hover {
-  background: rgba(255,255,255,0.2);
+/* Standard Buttons for reuse in modals and forms */
+.primary-btn {
+  background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%) !important;
+  color: white !important;
+  padding: 12px 24px !important;
+  border-radius: 12px !important;
+  border: none !important;
+  font-weight: 700 !important;
+  font-size: 1rem !important;
+  cursor: pointer !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2) !important;
 }
+
+.primary-btn:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 20px rgba(99, 102, 241, 0.4) !important;
+  filter: brightness(1.1) !important;
+}
+
+.primary-btn:active {
+  transform: translateY(0) !important;
+}
+
+.secondary-btn {
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: #edf2f4 !important;
+  padding: 12px 24px !important;
+  border-radius: 12px !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  font-weight: 600 !important;
+  font-size: 1rem !important;
+  cursor: pointer !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.secondary-btn:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  transform: translateY(-2px) !important;
+}
+
+.secondary-btn:active {
+  transform: translateY(0) !important;
+}
+
 
 .delete-btn {
   background: rgba(255, 107, 107, 0.15) !important;
@@ -234,18 +376,30 @@
 
 @keyframes fadeIn { to { opacity: 1; } }
 
-.modal-content.question-form-modal {
+.modal-content.question-form-modal,
+.modal-content.small-modal {
   background: #1a1a24;
   width: 95%;
   max-width: 900px;
   max-height: 90vh;
-  border-radius: 20px;
+  border-radius: 24px;
   border: 1px solid rgba(255,255,255,0.1);
   box-shadow: 0 25px 50px rgba(0,0,0,0.5);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  animation: modalScale 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
+
+.modal-content.small-modal {
+  max-width: 500px;
+}
+
+@keyframes modalScale {
+  from { transform: scale(0.9); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
 
 .modal-header {
   padding: 25px 30px;
@@ -308,11 +462,12 @@
   padding: 14px;
   background: rgba(0,0,0,0.3);
   border: 2px solid rgba(255,255,255,0.1);
-  border-radius: 10px;
+  border-radius: 12px;
   color: white;
   font-size: 1rem;
   transition: all 0.2s;
   font-family: inherit;
+  box-sizing: border-box;
 }
 
 .modern-input:focus, .modern-textarea:focus, select:focus {
@@ -321,6 +476,7 @@
   background: rgba(0,0,0,0.4);
   box-shadow: 0 0 0 3px rgba(255, 217, 61, 0.1);
 }
+
 
 .form-row {
   display: flex;

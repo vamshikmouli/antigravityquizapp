@@ -148,7 +148,11 @@ function MusicSettings() {
           Upload custom background music for different stages of your quiz. Music will play on the TV display only.
         </p>
 
-        <div style={{ display: 'grid', gap: '24px' }}>
+        <div style={{ 
+          display: 'grid', 
+          gap: '20px',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(450px, 1fr))'
+        }}>
           {MUSIC_TYPES.map(({ key, label, description, icon }) => {
             const track = getTrackForType(key);
             const isUploading = uploading === key;
@@ -159,17 +163,18 @@ function MusicSettings() {
                 key={key}
                 className="card-glass"
                 style={{
-                  padding: '24px',
-                  borderRadius: '20px',
-                  border: track ? '2px solid var(--color-success)' : '1px solid var(--color-border)'
+                  padding: '16px 20px',
+                  borderRadius: '16px',
+                  border: track ? '2px solid var(--color-success)' : '1px solid var(--color-border)',
+                  background: 'rgba(255,255,255,0.03)'
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '20px' }}>
                   <div style={{ fontSize: '48px' }}>{icon}</div>
                   
                   <div style={{ flex: 1 }}>
-                    <h3 style={{ marginBottom: '8px' }}>{label}</h3>
-                    <p style={{ opacity: 0.7, marginBottom: '16px' }}>{description}</p>
+                    <h3 style={{ marginBottom: '4px', fontSize: '1.2rem' }}>{label}</h3>
+                    <p style={{ opacity: 0.7, marginBottom: '12px', fontSize: '0.9rem' }}>{description}</p>
 
                     {track ? (
                       <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>

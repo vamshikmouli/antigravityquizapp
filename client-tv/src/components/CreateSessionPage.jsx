@@ -79,9 +79,9 @@ function CreateSessionPage() {
           
           <div className="quizzes-selection-grid" style={{ 
             display: 'grid', 
-            gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', 
-            gap: '20px', 
-            marginTop: '30px' 
+            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', 
+            gap: '15px', 
+            marginTop: '20px' 
           }}>
             {quizzes.map(quiz => (
               <div 
@@ -89,12 +89,16 @@ function CreateSessionPage() {
                 className={`card-glass quiz-select-card ${selectedQuizId === quiz.id ? 'selected' : ''}`} 
                 onClick={() => setSelectedQuizId(quiz.id)}
                 style={{
-                  padding: '30px',
-                  borderRadius: '24px',
+                  padding: '20px',
+                  borderRadius: '20px',
                   border: selectedQuizId === quiz.id ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
                   background: selectedQuizId === quiz.id ? 'rgba(99, 102, 241, 0.1)' : 'rgba(255, 255, 255, 0.03)',
                   cursor: 'pointer',
-                  transition: 'all 0.3s ease'
+                  transition: 'all 0.3s ease',
+                  minHeight: '120px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'center'
                 }}
               >
                 <h3 style={{ fontSize: '1.5rem', marginBottom: '10px' }}>{quiz.title}</h3>
@@ -125,9 +129,9 @@ function CreateSessionPage() {
           )}
         </div>
 
-        <div className="wizard-step" style={{ marginTop: '40px' }}>
-          <h2>Session Settings</h2>
-          <div className="card-glass" style={{ padding: '30px', borderRadius: '24px', marginTop: '20px' }}>
+        <div className="wizard-step" style={{ marginTop: '30px' }}>
+          <h2 style={{ fontSize: '1.4rem' }}>Session Settings</h2>
+          <div className="card-glass" style={{ padding: '20px', borderRadius: '20px', marginTop: '15px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
               <div>
                 <h3 style={{ margin: 0 }}>🎵 Background Music</h3>

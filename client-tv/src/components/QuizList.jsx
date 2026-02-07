@@ -113,25 +113,31 @@ function QuizList() {
 
       {showAddModal && (
         <div className="modal-overlay">
-          <div className="modal-content card-glass" style={{ maxWidth: '500px', width: '90%' }}>
-            <h2>Create New Quiz</h2>
-            <form onSubmit={handleCreateQuiz} style={{ marginTop: '20px' }}>
-              <div className="form-group" style={{ marginBottom: '20px' }}>
-                <label>Quiz Title</label>
-                <input 
-                  type="text" 
-                  value={newQuizTitle} 
-                  onChange={(e) => setNewQuizTitle(e.target.value)}
-                  placeholder="e.g. Science Midterm"
-                  autoFocus
-                  required
-                />
-              </div>
-              <div className="modal-footer" style={{ display: 'flex', gap: '15px', justifyContent: 'flex-end' }}>
-                <button type="button" onClick={() => setShowAddModal(false)} className="secondary-btn" style={{ background: 'transparent', border: '1px solid var(--color-border)', color: 'white' }}>Cancel</button>
-                <button type="submit" className="primary-btn" style={{ background: 'var(--grad-primary)' }}>Create Quiz</button>
-              </div>
-            </form>
+          <div className="modal-content small-modal">
+            <div className="modal-header">
+              <h2>Create New Quiz</h2>
+              <button className="close-btn" onClick={() => setShowAddModal(false)}>&times;</button>
+            </div>
+            <div className="modern-form">
+              <form onSubmit={handleCreateQuiz}>
+                <div className="form-group">
+                  <label style={{ fontSize: '0.9rem', color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 'bold' }}>Quiz Title</label>
+                  <input 
+                    type="text" 
+                    className="modern-input"
+                    value={newQuizTitle} 
+                    onChange={(e) => setNewQuizTitle(e.target.value)}
+                    placeholder="e.g. Science Midterm"
+                    autoFocus
+                    required
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: '15px', marginTop: '30px' }}>
+                  <button type="button" onClick={() => setShowAddModal(false)} className="secondary-btn" style={{ flex: 1 }}>Cancel</button>
+                  <button type="submit" className="primary-btn" style={{ flex: 2 }}>Create Quiz</button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}
