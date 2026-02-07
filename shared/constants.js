@@ -2,6 +2,8 @@
 export const QUESTION_TYPES = {
   MULTIPLE_CHOICE: 'MULTIPLE_CHOICE',
   BUZZER: 'BUZZER',
+  ORAL_BUZZER: 'ORAL_BUZZER',
+  ORAL_OPEN: 'ORAL_OPEN',
   TRUE_FALSE: 'TRUE_FALSE',
   SHORT_ANSWER: 'SHORT_ANSWER'
 };
@@ -51,6 +53,9 @@ export const SOCKET_EVENTS = {
   // Answers
   SUBMIT_ANSWER: 'submit-answer',
   ANSWER_RECEIVED: 'answer-received',
+  MARK_BUZZER_CORRECT: 'mark-buzzer-correct',
+  MARK_BUZZER_INCORRECT: 'mark-buzzer-incorrect',
+  MARK_PARTICIPANT_ORAL: 'mark-participant-oral',
   SHOW_RESULTS: 'show-results',
   
   // Leaderboard

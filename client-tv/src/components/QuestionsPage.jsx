@@ -157,13 +157,11 @@ function QuestionsPage() {
   return (
     <div className="dashboard-container">
       <header className="dashboard-header">
-        <div>
+        <div className="header-info" style={{ display: 'flex', alignItems: 'center' }}>
+          <Link to="/quizzes" className="top-left-back-btn">← Back</Link>
           <h1 style={{ marginBottom: '8px' }}>{quiz?.title || 'Quiz Details'}</h1>
-          <p style={{ color: 'var(--color-primary)', fontWeight: 'bold' }}>{questions.length} Questions</p>
         </div>
         <div className="header-actions">
-          <Link to="/quizzes" className="back-link">← All Quizzes</Link>
-          
           <button 
             onClick={() => { fetchAvailableQuizzes(); setShowImportModal(true); }} 
             className="add-btn" 

@@ -125,16 +125,18 @@ export function getScoreDistribution(participants) {
 export function isValidQuestion(question) {
   if (!question.text || typeof question.text !== 'string') return false;
   
-  const validTypes = ['MULTIPLE_CHOICE', 'BUZZER', 'TRUE_FALSE', 'SHORT_ANSWER'];
+  const validTypes = ['MULTIPLE_CHOICE', 'BUZZER', 'ORAL_BUZZER', 'ORAL_OPEN', 'TRUE_FALSE', 'SHORT_ANSWER'];
   if (!question.type || !validTypes.includes(question.type)) return false;
   
-  // SHORT_ANSWER doesn't require options
-  if (question.type !== 'SHORT_ANSWER') {
+  // SHORT_ANSWER, ORAL_BUZZER, and ORAL_OPEN don't require options
+  if (question.type !== 'SHORT_ANSWER' && question.type !== 'ORAL_BUZZER' && question.type !== 'ORAL_OPEN') {
     if (!Array.isArray(question.options) || question.options.length < 2) return false;
     if (!question.correctAnswer || !question.options.includes(question.correctAnswer)) return false;
   } else {
     // SHORT_ANSWER requires a correctAnswer but options can be empty
-    if (!question.correctAnswer) return false;
+    // ORAL_BUZZER doesn't strictly need a correctAnswer in DB as it's oral, 
+    // but schema requires it. We'll allow it to be empty or placeholder in validation if it's ORAL_BUZZER
+    if (question.type === 'SHORT_ANSWER' && !question.correctAnswer) return false;
   }
   
   if (typeof question.points !== 'number' || question.points < 0) return false;

@@ -5,6 +5,8 @@ import './QuestionManager.css';
 const QUESTION_TYPES = {
   MULTIPLE_CHOICE: 'MULTIPLE_CHOICE',
   BUZZER: 'BUZZER',
+  ORAL_BUZZER: 'ORAL_BUZZER',
+  ORAL_OPEN: 'ORAL_OPEN',
   TRUE_FALSE: 'TRUE_FALSE',
   SHORT_ANSWER: 'SHORT_ANSWER'
 };
@@ -41,12 +43,12 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null }
           options: ['True', 'False'],
           correctAnswer: 'True' 
         }));
-      } else if (value === 'SHORT_ANSWER') {
+      } else if (value === 'SHORT_ANSWER' || value === 'ORAL_BUZZER' || value === 'ORAL_OPEN') {
         setFormData(prev => ({ 
           ...prev, 
           type: value,
           options: [],
-          correctAnswer: '' 
+          correctAnswer: (value === 'ORAL_BUZZER' || value === 'ORAL_OPEN') ? 'Oral' : '' 
         }));
       } else {
         // MCQ or BUZZER
@@ -113,7 +115,7 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null }
     
     // Validation
     if (!formData.text) return setError('Question text is required');
-    if (formData.type !== 'SHORT_ANSWER' && !formData.correctAnswer) return setError('Correct answer is required');
+    if (!['SHORT_ANSWER', 'ORAL_BUZZER', 'ORAL_OPEN'].includes(formData.type) && !formData.correctAnswer) return setError('Correct answer is required');
     if (['MULTIPLE_CHOICE', 'BUZZER'].includes(formData.type)) {
       if (formData.options.some(opt => !opt)) return setError('All options must be filled');
     }
@@ -171,8 +173,10 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null }
                     value={formData.type} 
                     onChange={(e) => handleChange('type', e.target.value)}
                   >
-                    <option value="MULTIPLE_CHOICE">Multiple Choice</option>
-                    <option value="BUZZER">Buzzer (Fastest Finger)</option>
+                    <option value="MULTIPLE_CHOICE">Poll (Multiple Choice)</option>
+                    <option value="BUZZER">Fastest Finger (Buzzer with Options)</option>
+                    <option value="ORAL_BUZZER">Shout (Oral Buzzer)</option>
+                    <option value="ORAL_OPEN">Spotlight (Host Picks)</option>
                     <option value="TRUE_FALSE">True / False</option>
                     <option value="SHORT_ANSWER">Short Answer</option>
                   </select>

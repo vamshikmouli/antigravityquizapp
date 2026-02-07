@@ -7,10 +7,13 @@ function QuizScreen({ socket, participantData, initialGameState }) {
   const [currentQuestion, setCurrentQuestion] = useState(initialGameState?.question || null)
   const [questionStartTime, setQuestionStartTime] = useState(initialGameState?.startTime || null)
   const [timeRemaining, setTimeRemaining] = useState(0)
+  const [totalTime, setTotalTime] = useState(0)
+  const [timerPhase, setTimerPhase] = useState('READING')
   const [buzzerActive, setBuzzerActive] = useState(false)
   const [buzzerLocked, setBuzzerLocked] = useState(false)
   const [buzzerWinner, setBuzzerWinner] = useState(null)
-  const [canAnswer, setCanAnswer] = useState(initialGameState?.question && !initialGameState?.hasAnswered && initialGameState?.question.type !== 'BUZZER')
+  const [buzzerStartTime, setBuzzerStartTime] = useState(null)
+  const [canAnswer, setCanAnswer] = useState(initialGameState?.question && !initialGameState?.hasAnswered && !['BUZZER', 'ORAL_BUZZER'].includes(initialGameState?.question.type))
   const [answerSubmitted, setAnswerSubmitted] = useState(initialGameState?.hasAnswered || false)
   const [feedback, setFeedback] = useState(initialGameState?.lastAnswerResult || null)
   const [score, setScore] = useState(participantData?.score || 0)
@@ -29,7 +32,7 @@ function QuizScreen({ socket, participantData, initialGameState }) {
         setFeedback(initialGameState.lastAnswerResult)
         setCanAnswer(false)
       } else {
-        setCanAnswer(initialGameState.question.type !== 'BUZZER')
+        setCanAnswer(!['BUZZER', 'ORAL_BUZZER'].includes(initialGameState.question.type))
       }
     }
   }, [initialGameState, currentQuestion])
@@ -41,24 +44,30 @@ function QuizScreen({ socket, participantData, initialGameState }) {
     socket.on('question-started', (data) => {
       setCurrentQuestion(data.question)
       setQuestionStartTime(data.startTime)
-      setTimeRemaining(data.question.timeLimit)
+      const readingTime = data.question.readingTime || 0
+      if (readingTime > 0) {
+        setTimerPhase('READING')
+        setTotalTime(readingTime)
+        setTimeRemaining(readingTime)
+        setIsReading(true)
+      } else {
+        setTimerPhase('QUESTION')
+        setTotalTime(data.question.timeLimit)
+        setTimeRemaining(data.question.timeLimit)
+        setIsReading(false)
+      }
       setBuzzerActive(false)
       setBuzzerLocked(false)
       setBuzzerWinner(null)
+      setBuzzerStartTime(null)
       setAnswerSubmitted(false)
       setFeedback(null)
       
       // For non-buzzer questions, enable answering immediately
-      if (data.question.type !== 'BUZZER') {
+      if (!['BUZZER', 'ORAL_BUZZER'].includes(data.question.type)) {
         setCanAnswer(true)
       } else {
         setCanAnswer(false)
-      }
-      // Show reading indicator if readingTime > 0
-      if (data.question.readingTime > 0) {
-        setIsReading(true)
-      } else {
-        setIsReading(false)
       }
     })
     
@@ -73,6 +82,10 @@ function QuizScreen({ socket, participantData, initialGameState }) {
     socket.on('buzzer-winner', (data) => {
       setBuzzerWinner(data.winner)
       setBuzzerLocked(true)
+      setBuzzerStartTime(Date.now())
+      setTimerPhase('BUZZER')
+      setTotalTime(10) // BUZZER_ANSWER constant is 10
+      setTimeRemaining(10)
       
       // If I'm the winner, enable answering
       if (data.winner.participantId === participantData.id) {
@@ -123,26 +136,46 @@ function QuizScreen({ socket, participantData, initialGameState }) {
     }
   }, [socket, participantData])
   
-  // Timer countdown
+  // Timer effect
   useEffect(() => {
-    if (!currentQuestion || !questionStartTime) return
-    
+    if (!currentQuestion) return
+
     timerRef.current = setInterval(() => {
-      const elapsed = Math.floor((Date.now() - questionStartTime) / 1000)
-      const remaining = Math.max(0, currentQuestion.timeLimit - elapsed)
-      setTimeRemaining(remaining)
-      
-      if (remaining === 0) {
-        clearInterval(timerRef.current)
+      if (buzzerWinner && buzzerStartTime) {
+        const elapsed = Math.floor((Date.now() - buzzerStartTime) / 1000)
+        const remaining = Math.max(0, 10 - elapsed)
+        setTimeRemaining(remaining)
+        if (remaining === 0) clearInterval(timerRef.current)
+        return
+      }
+
+      if (questionStartTime) {
+        const totalElapsed = Math.floor((Date.now() - questionStartTime) / 1000)
+        const readingTime = currentQuestion.readingTime || 0
+
+        if (totalElapsed < readingTime) {
+          setTimerPhase('READING')
+          setTotalTime(readingTime)
+          setTimeRemaining(readingTime - totalElapsed)
+          setIsReading(true)
+        } else {
+          const questionElapsed = totalElapsed - readingTime
+          const remaining = Math.max(0, currentQuestion.timeLimit - questionElapsed)
+          
+          if (timerPhase === 'READING') {
+             setTimerPhase('QUESTION')
+             setTotalTime(currentQuestion.timeLimit)
+             setIsReading(false)
+          }
+
+          setTimeRemaining(remaining)
+          if (remaining === 0) clearInterval(timerRef.current)
+        }
       }
     }, 100)
-    
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current)
-      }
-    }
-  }, [currentQuestion, questionStartTime])
+
+    return () => clearInterval(timerRef.current)
+  }, [currentQuestion, questionStartTime, buzzerWinner, buzzerStartTime, timerPhase])
   
   const handleBuzzerPress = () => {
     if (!buzzerActive || buzzerLocked || !socket) return
@@ -205,16 +238,31 @@ function QuizScreen({ socket, participantData, initialGameState }) {
         </div>
       </div>
       
-      {/* Timer */}
-      <div className="timer-container">
-        <div 
-          className="timer-bar" 
-          style={{ 
-            width: `${(timeRemaining / currentQuestion.timeLimit) * 100}%`,
-            backgroundColor: timeRemaining <= 5 ? 'var(--color-error)' : 'var(--color-success)'
-          }}
-        ></div>
-        <div className="timer-text">{timeRemaining}s</div>
+      {/* Circular Timer */}
+      <div className={`timer-circular-container-mobile ${timerPhase.toLowerCase()}-phase`}>
+        <svg className="timer-svg-mobile" viewBox="0 0 100 100">
+          <circle className="timer-bg-mobile" cx="50" cy="50" r="45" />
+          <circle 
+            className="timer-progress-mobile" 
+            cx="50" 
+            cy="50" 
+            r="45"
+            style={{
+              strokeDashoffset: 283 - (283 * (timeRemaining / (totalTime || 1))),
+              stroke: timeRemaining <= 3 ? 'var(--color-error)' : 
+                      timerPhase === 'READING' ? '#3498db' :
+                      timerPhase === 'BUZZER' ? 'var(--color-warning)' :
+                      'var(--color-success)'
+            }}
+          />
+        </svg>
+        <div className="timer-content-mobile">
+          <span className="timer-digits-mobile">{timeRemaining}</span>
+          <span className="timer-unit-mobile">
+            {timerPhase === 'READING' ? 'READING' : 
+             timerPhase === 'BUZZER' ? 'GO!' : 'SEC'}
+          </span>
+        </div>
       </div>
       
       {/* Question */}
@@ -234,7 +282,7 @@ function QuizScreen({ socket, participantData, initialGameState }) {
       </div>
       
       {/* Buzzer or Answer Options */}
-      {currentQuestion.type === 'BUZZER' && buzzerActive && !buzzerWinner ? (
+      {(currentQuestion.type === 'BUZZER' || currentQuestion.type === 'ORAL_BUZZER') && buzzerActive && !buzzerWinner ? (
         <BuzzerButton 
           active={buzzerActive && !buzzerLocked}
           onPress={handleBuzzerPress}
@@ -247,7 +295,15 @@ function QuizScreen({ socket, participantData, initialGameState }) {
               <>
                 <div className="trophy">🏆</div>
                 <h3>You buzzed first!</h3>
-                <p>Select your answer below</p>
+                {currentQuestion.type === 'ORAL_BUZZER' ? (
+                  <div className="oral-instruction">
+                    <div className="mic-icon">🎤</div>
+                    <p className="highlight-text">ANSWER ORALLY NOW!</p>
+                    <p>The host will mark your answer.</p>
+                  </div>
+                ) : (
+                  <p>Select your answer below</p>
+                )}
               </>
             ) : (
               <>
@@ -258,7 +314,13 @@ function QuizScreen({ socket, participantData, initialGameState }) {
             )}
           </div>
         </div>
-      ) : isReading && currentQuestion.type === 'BUZZER' ? (
+      ) : currentQuestion.type === 'ORAL_OPEN' ? (
+        <div className="oral-instruction">
+          <div className="mic-icon">🎤</div>
+          <p className="highlight-text">LISTEN TO THE HOST!</p>
+          <p>They might pick you to answer orally.</p>
+        </div>
+      ) : isReading && (currentQuestion.type === 'BUZZER' || currentQuestion.type === 'ORAL_BUZZER') ? (
         <div className="reading-indicator">
           <div className="pulse-dot"></div>
           <p>Read the question... Buzzer opening soon!</p>
@@ -287,7 +349,7 @@ function QuizScreen({ socket, participantData, initialGameState }) {
       )}
 
       {/* Answer Options (MCQ / TrueFalse / Buzzer) */}
-      {canAnswer && !answerSubmitted && currentQuestion.type !== 'SHORT_ANSWER' && (
+      {canAnswer && !answerSubmitted && !['SHORT_ANSWER', 'ORAL_BUZZER'].includes(currentQuestion.type) && (
         <AnswerOptions 
           options={currentQuestion.options}
           optionImages={currentQuestion.optionImages}

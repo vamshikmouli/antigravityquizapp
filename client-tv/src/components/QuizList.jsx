@@ -72,9 +72,11 @@ function QuizList() {
   return (
     <div className="dashboard-container fade-in">
       <header className="dashboard-header">
-        <h1>My Quizzes</h1>
+        <div className="header-info" style={{ display: 'flex', alignItems: 'center' }}>
+          <Link to="/dashboard" className="top-left-back-btn">← Back</Link>
+          <h1>My Quizzes</h1>
+        </div>
         <div className="header-actions">
-          <Link to="/" className="back-link">← Dashboard</Link>
           <button onClick={() => setShowAddModal(true)} className="add-btn">+ New Quiz</button>
         </div>
       </header>

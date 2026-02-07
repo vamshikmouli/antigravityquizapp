@@ -137,8 +137,10 @@ function MusicSettings() {
   return (
     <div className="dashboard-container fade-in">
       <header className="dashboard-header">
-        <h1>🎵 Music Settings</h1>
-        <Link to="/dashboard" className="back-link">← Back to Dashboard</Link>
+        <div className="header-info" style={{ display: 'flex', alignItems: 'center' }}>
+          <Link to="/dashboard" className="top-left-back-btn">← Back</Link>
+          <h1>🎵 Music Settings</h1>
+        </div>
       </header>
 
       <div className="content-section">

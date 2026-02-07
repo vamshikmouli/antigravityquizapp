@@ -39,6 +39,8 @@ model Question {
 enum QuestionType {
   MULTIPLE_CHOICE
   BUZZER
+  ORAL_BUZZER
+  ORAL_OPEN
   TRUE_FALSE
   SHORT_ANSWER
 }

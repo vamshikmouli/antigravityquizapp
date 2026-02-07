@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import ResultsTable from './ResultsTable';
 import './FinalResultsDisplay.css';
 
-const FinalResultsDisplay = ({ analytics, sessionCode, audioManager }) => {
+const FinalResultsDisplay = ({ analytics, sessionCode, audioManager, onClose }) => {
   useEffect(() => {
     if (audioManager) {
       audioManager.play('FINAL_RESULTS');
@@ -63,6 +63,9 @@ const FinalResultsDisplay = ({ analytics, sessionCode, audioManager }) => {
         
         <footer className="results-footer">
            <p>Thank you for playing!</p>
+           <button onClick={onClose} className="back-dashboard-btn">
+             Back to Dashboard 🏠
+           </button>
         </footer>
       </div>
     </div>

@@ -66,8 +66,10 @@ function CreateSessionPage() {
   return (
     <div className="dashboard-container fade-in">
       <header className="dashboard-header">
-        <h1>Launch a Quiz</h1>
-        <Link to="/dashboard" className="back-link">Cancel</Link>
+        <div className="header-info" style={{ display: 'flex', alignItems: 'center' }}>
+          <Link to="/dashboard" className="top-left-back-btn">← Back</Link>
+          <h1>Launch a Quiz</h1>
+        </div>
       </header>
 
       <div className="session-wizard">

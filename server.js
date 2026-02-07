@@ -682,7 +682,7 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
       });
       
       // If buzzer question, activate buzzer after readingTime
-      if (question.type === QUESTION_TYPES.BUZZER) {
+      if (question.type === QUESTION_TYPES.BUZZER || question.type === QUESTION_TYPES.ORAL_BUZZER) {
         const buzzerManager = getBuzzerManager(sessionId);
         
         if (question.readingTime > 0) {
@@ -922,6 +922,191 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
     } catch (error) {
       console.error('Error submitting answer:', error);
       socket.emit(SOCKET_EVENTS.ERROR, { message: error.message });
+    }
+  });
+
+  socket.on(SOCKET_EVENTS.MARK_BUZZER_CORRECT, async (data) => {
+    try {
+      const { sessionId, sessionCode, role } = socket.data;
+      const { questionId, participantId } = data;
+
+      if (role !== 'host') {
+        socket.emit(SOCKET_EVENTS.ERROR, { message: 'Only host can mark answers' });
+        return;
+      }
+
+      // Submit "Oral" as the correct answer
+      const result = await scoringController.submitAnswer(
+        participantId,
+        questionId,
+        'Oral'
+      );
+
+      // Clear buzzer timeout
+      const buzzerManager = getBuzzerManager(sessionId);
+      buzzerManager.clearAnswerTimeout();
+      buzzerManager.deactivate();
+
+      // Notify the student
+      const studentSocket = Array.from(io.sockets.sockets.values()).find(
+        s => s.data.participantId === participantId && s.data.sessionId === sessionId
+      );
+      if (studentSocket) {
+        studentSocket.emit(SOCKET_EVENTS.ANSWER_RECEIVED, {
+            isCorrect: true,
+            points: result.points,
+            correctAnswer: result.correctAnswer
+        });
+      }
+
+      // Notify everyone results are ready (to update TV/Host view)
+      io.to(sessionCode).emit(SOCKET_EVENTS.SHOW_RESULTS, {
+        correctAnswer: 'Oral',
+        correctCount: 1,
+        incorrectCount: 0,
+        correctNames: [studentSocket?.data?.participantName || 'Student'],
+        incorrectNames: [],
+        totalAnswers: 1,
+        correctPercentage: 100
+      });
+
+      // Update leaderboard
+      const participants = await sessionController.getParticipants(sessionId);
+      const rankings = calculateRankings(participants);
+      io.to(sessionCode).emit(SOCKET_EVENTS.LEADERBOARD_UPDATE, {
+        leaderboard: rankings
+      });
+
+    } catch (error) {
+      console.error('Error marking buzzer correct:', error);
+      socket.emit(SOCKET_EVENTS.ERROR, { message: 'Failed to mark answer' });
+    }
+  });
+
+  socket.on(SOCKET_EVENTS.MARK_BUZZER_INCORRECT, async (data) => {
+    try {
+      const { sessionId, sessionCode, role } = socket.data;
+      const { questionId, participantId } = data;
+
+      if (role !== 'host') {
+        socket.emit(SOCKET_EVENTS.ERROR, { message: 'Only host can mark answers' });
+        return;
+      }
+
+      // Submit something else to get "Incorrect"
+      const result = await scoringController.submitAnswer(
+        participantId,
+        questionId,
+        'Incorrect_Oral_Answer'
+      );
+
+      // Reopen buzzer for others if we want, or just end it?
+      // Usually in buzzer rounds, if one is wrong, others can buzz or it's dead.
+      // For now, let's keep it locked/ended for this question.
+      const buzzerManager = getBuzzerManager(sessionId);
+      buzzerManager.clearAnswerTimeout();
+      buzzerManager.deactivate();
+
+      // Notify the student
+      const studentSocket = Array.from(io.sockets.sockets.values()).find(
+        s => s.data.participantId === participantId && s.data.sessionId === sessionId
+      );
+      if (studentSocket) {
+        studentSocket.emit(SOCKET_EVENTS.ANSWER_RECEIVED, {
+            isCorrect: false,
+            points: result.points,
+            correctAnswer: 'Oral'
+        });
+      }
+
+      // Notify everyone results are ready
+      io.to(sessionCode).emit(SOCKET_EVENTS.SHOW_RESULTS, {
+        correctAnswer: 'Oral',
+        correctCount: 0,
+        incorrectCount: 1,
+        correctNames: [],
+        incorrectNames: [studentSocket?.data?.participantName || 'Student'],
+        totalAnswers: 1,
+        correctPercentage: 0
+      });
+
+      // Update leaderboard
+      const participants = await sessionController.getParticipants(sessionId);
+      const rankings = calculateRankings(participants);
+      io.to(sessionCode).emit(SOCKET_EVENTS.LEADERBOARD_UPDATE, {
+        leaderboard: rankings
+      });
+
+    } catch (error) {
+      console.error('Error marking buzzer incorrect:', error);
+      socket.emit(SOCKET_EVENTS.ERROR, { message: 'Failed to mark answer' });
+    }
+  });
+
+  socket.on('get-participants', async (callback) => {
+    try {
+      const { sessionId } = socket.data;
+      if (!sessionId) return;
+      const participants = await sessionController.getParticipants(sessionId);
+      if (typeof callback === 'function') {
+        callback({ participants });
+      }
+    } catch (error) {
+      console.error('Error fetching participants:', error);
+    }
+  });
+
+  socket.on(SOCKET_EVENTS.MARK_PARTICIPANT_ORAL, async (data) => {
+    try {
+      const { sessionId, sessionCode, role } = socket.data;
+      const { questionId, participantId, isCorrect } = data;
+
+      if (role !== 'host') {
+        socket.emit(SOCKET_EVENTS.ERROR, { message: 'Only host can mark answers' });
+        return;
+      }
+
+      // Submit "Oral" for correct, or something else for wrong
+      const result = await scoringController.submitAnswer(
+        participantId,
+        questionId,
+        isCorrect ? 'Oral' : 'Incorrect_Oral_Answer'
+      );
+
+      // Notify the specific student
+      const studentSocket = Array.from(io.sockets.sockets.values()).find(
+        s => s.data.participantId === participantId && s.data.sessionId === sessionId
+      );
+      
+      if (studentSocket) {
+        studentSocket.emit(SOCKET_EVENTS.ANSWER_RECEIVED, {
+            isCorrect,
+            points: result.points,
+            correctAnswer: 'Oral'
+        });
+      }
+
+      // Notify everyone results for this specific pick
+      io.to(sessionCode).emit(SOCKET_EVENTS.SHOW_RESULTS, {
+        correctAnswer: 'Oral',
+        correctCount: isCorrect ? 1 : 0,
+        incorrectCount: isCorrect ? 0 : 1,
+        correctNames: isCorrect ? [studentSocket?.data?.participantName || 'Student'] : [],
+        incorrectNames: isCorrect ? [] : [studentSocket?.data?.participantName || 'Student'],
+        totalAnswers: 1,
+        correctPercentage: isCorrect ? 100 : 0
+      });
+
+      // Update leaderboard
+      const participants = await sessionController.getParticipants(sessionId);
+      const rankings = calculateRankings(participants);
+      io.to(sessionCode).emit(SOCKET_EVENTS.LEADERBOARD_UPDATE, {
+        leaderboard: rankings
+      });
+
+    } catch (error) {
+      console.error('Error marking participant oral:', error);
+      socket.emit(SOCKET_EVENTS.ERROR, { message: 'Failed to mark answer' });
     }
   });
   

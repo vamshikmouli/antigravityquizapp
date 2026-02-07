@@ -1,19 +1,43 @@
 import { useState, useEffect, useRef } from 'react'
 import Leaderboard from './Leaderboard'
 import FinalResultsDisplay from './FinalResultsDisplay'
+import { SOCKET_EVENTS, TIME_LIMITS } from '../../../shared/constants'
 import './QuestionDisplay.css'
 
 function QuestionDisplay({ socket, sessionData, userRole, audioManager }) {
   const [currentQuestion, setCurrentQuestion] = useState(null)
   const [questionStartTime, setQuestionStartTime] = useState(null)
   const [timeRemaining, setTimeRemaining] = useState(0)
+  const [totalTime, setTotalTime] = useState(0)
+  const [timerPhase, setTimerPhase] = useState('READING') // 'READING', 'QUESTION', 'BUZZER'
   const [buzzerWinner, setBuzzerWinner] = useState(null)
+  const [buzzerStartTime, setBuzzerStartTime] = useState(null)
+  const [isBuzzerPhase, setIsBuzzerPhase] = useState(false)
   const [leaderboard, setLeaderboard] = useState([])
   const [showResults, setShowResults] = useState(false)
   const [questionResults, setQuestionResults] = useState(null)
   const [roundResults, setRoundResults] = useState(null)
+  
+  const [participants, setParticipants] = useState([]);
+  const [selectedParticipant, setSelectedParticipant] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const timerRef = useRef(null)
+
+  useEffect(() => {
+    // Reset selected participant when question changes
+    setSelectedParticipant(null);
+    setSearchTerm('');
+    
+    // Fetch participants for picking in ORAL_OPEN
+    if (currentQuestion?.type === 'ORAL_OPEN' && userRole === 'host') {
+      socket.emit('get-participants', (data) => {
+        if (data && data.participants) {
+          setParticipants(data.participants);
+        }
+      });
+    }
+  }, [currentQuestion, userRole, socket]);
 
 
 
@@ -25,8 +49,19 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager }) {
       console.log('TV: question-started', data.question.id);
       setCurrentQuestion(data.question)
       setQuestionStartTime(data.startTime)
-      setTimeRemaining(data.question.timeLimit)
+      const readingTime = data.question.readingTime || 0
+      if (readingTime > 0) {
+        setTimerPhase('READING')
+        setTotalTime(readingTime)
+        setTimeRemaining(readingTime)
+      } else {
+        setTimerPhase('QUESTION')
+        setTotalTime(data.question.timeLimit)
+        setTimeRemaining(data.question.timeLimit)
+      }
       setBuzzerWinner(null)
+      setBuzzerStartTime(null)
+      setIsBuzzerPhase(false)
       setShowResults(false)
       setQuestionResults(null)
       setRoundResults(null) // Clear round results
@@ -38,6 +73,11 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager }) {
     // Buzzer winner
     socket.on('buzzer-winner', (data) => {
       setBuzzerWinner(data.winner)
+      setBuzzerStartTime(Date.now())
+      setIsBuzzerPhase(true)
+      setTimerPhase('BUZZER')
+      setTotalTime(TIME_LIMITS.BUZZER_ANSWER)
+      setTimeRemaining(TIME_LIMITS.BUZZER_ANSWER)
     })
     
     // Leaderboard update
@@ -91,21 +131,46 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager }) {
   
   // Timer countdown
   useEffect(() => {
-    if (!currentQuestion || !questionStartTime) return
+    if (!currentQuestion) return
     
     timerRef.current = setInterval(() => {
-      const elapsed = Math.floor((Date.now() - questionStartTime) / 1000)
-      const remaining = Math.max(0, currentQuestion.timeLimit - elapsed)
-      setTimeRemaining(remaining)
-      
-      // Handle music transition from QUESTION to OPTIONS
-      const readingTimePassed = elapsed >= (currentQuestion.readingTime || 0);
-      if (readingTimePassed && audioManager?.currentTrack === audioManager?.tracks?.QUESTION) {
-        audioManager?.play('OPTIONS');
+      if (isBuzzerPhase && buzzerStartTime) {
+        const elapsed = Math.floor((Date.now() - buzzerStartTime) / 1000)
+        const remaining = Math.max(0, TIME_LIMITS.BUZZER_ANSWER - elapsed)
+        setTimeRemaining(remaining)
+        if (remaining === 0) clearInterval(timerRef.current)
+        return
       }
 
-      if (remaining === 0) {
-        clearInterval(timerRef.current)
+      if (questionStartTime) {
+        const totalElapsed = Math.floor((Date.now() - questionStartTime) / 1000)
+        const readingTime = currentQuestion.readingTime || 0
+        
+        if (totalElapsed < readingTime) {
+          // Phase 1: Reading
+          setTimerPhase('READING')
+          setTotalTime(readingTime)
+          setTimeRemaining(readingTime - totalElapsed)
+        } else {
+          // Phase 2: Question
+          const questionElapsed = totalElapsed - readingTime
+          const remaining = Math.max(0, currentQuestion.timeLimit - questionElapsed)
+          
+          if (timerPhase === 'READING') {
+            setTimerPhase('QUESTION')
+            setTotalTime(currentQuestion.timeLimit)
+            // Play music transition if not already handled
+            if (audioManager?.currentTrack === audioManager?.tracks?.QUESTION) {
+              audioManager?.play('OPTIONS');
+            }
+          }
+          
+          setTimeRemaining(remaining)
+
+          if (remaining === 0) {
+            clearInterval(timerRef.current)
+          }
+        }
       }
     }, 100)
     
@@ -114,7 +179,7 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager }) {
         clearInterval(timerRef.current)
       }
     }
-  }, [currentQuestion, questionStartTime])
+  }, [currentQuestion, questionStartTime, isBuzzerPhase, buzzerStartTime, timerPhase])
   
   if (!currentQuestion) {
     return (
@@ -182,16 +247,31 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager }) {
             </div>
           </div>
           
-          {/* Timer */}
-          <div className="timer-bar-container">
-            <div
-              className="timer-bar-fill"
-              style={{
-                width: `${(timeRemaining / currentQuestion.timeLimit) * 100}%`,
-                backgroundColor: timeRemaining <= 5 ? 'var(--color-error)' : 'var(--color-success)'
-              }}
-            ></div>
-            <div className="timer-text-tv">{timeRemaining}s</div>
+          {/* Circular Timer */}
+          <div className={`timer-circular-container ${timerPhase.toLowerCase()}-phase`}>
+            <svg className="timer-svg" viewBox="0 0 100 100">
+              <circle className="timer-bg" cx="50" cy="50" r="45" />
+              <circle 
+                className="timer-progress" 
+                cx="50" 
+                cy="50" 
+                r="45"
+                style={{
+                  strokeDashoffset: 283 - (283 * (timeRemaining / (totalTime || 1))),
+                  stroke: timeRemaining <= 3 ? 'var(--color-error)' : 
+                          timerPhase === 'READING' ? '#3498db' :
+                          timerPhase === 'BUZZER' ? 'var(--color-warning)' :
+                          'var(--color-success)'
+                }}
+              />
+            </svg>
+            <div className="timer-content-tv">
+              <span className="timer-digits">{timeRemaining}</span>
+              <span className="timer-unit">
+                {timerPhase === 'READING' ? 'READING' : 
+                 timerPhase === 'BUZZER' ? 'ANSWER' : 'SEC'}
+              </span>
+            </div>
           </div>
           
           {/* Question */}
@@ -215,42 +295,152 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager }) {
             </div>
           )}
           
-          {/* Answer Options */}
-          <div className="answer-grid-tv">
-            {currentQuestion.options.map((option, index) => (
-              <div
-                key={index}
-                className={`answer-card-tv ${showResults && option === currentQuestion.correctAnswer ? 'correct' : ''} ${showResults && option !== currentQuestion.correctAnswer ? 'dimmed' : ''}`}
-                style={{
-                  '--option-color': optionColors[index],
-                  animationDelay: `${index * 100}ms`
-                }}
-              >
-                <div className="option-label-tv">{optionLabels[index]}</div>
-                <div className="option-content-tv">
-                  {currentQuestion.optionImages && currentQuestion.optionImages[index] && (
-                    <img src={currentQuestion.optionImages[index]} alt="" className="option-image-tv" />
-                  )}
-                  <div className="option-text-tv">{option}</div>
+          {/* Answer Options or Oral Instructions */}
+          {currentQuestion.type === 'ORAL_BUZZER' ? (
+            <div className="oral-buzzer-info card-gradient">
+              {!buzzerWinner ? (
+                <div className="waiting-buzz">
+                  <div className="pulse-icon">⚡</div>
+                  <p>Wait for the Buzzer!</p>
                 </div>
-                {showResults && option === currentQuestion.correctAnswer && (
-                  <div className="correct-indicator">✓</div>
-                )}
-              </div>
-            ))}
-          </div>
+              ) : (
+                <div className="answering-now">
+                  <div className="pulse-icon">🎤</div>
+                  <p>Answering Orally...</p>
+                </div>
+              )}
+            </div>
+          ) : currentQuestion.type === 'ORAL_OPEN' ? (
+            <div className="oral-open-container">
+              {userRole === 'host' && !showResults ? (
+                <div className="participant-picker card-gradient">
+                  <h3>Pick a student to answer:</h3>
+                  <input 
+                    type="text" 
+                    placeholder="Search student..." 
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="participant-search"
+                  />
+                  <div className="participant-grid">
+                    {participants
+                      .filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()))
+                      .map(p => (
+                      <div 
+                        key={p.id} 
+                        className={`participant-chip ${selectedParticipant?.id === p.id ? 'selected' : ''}`}
+                        onClick={() => setSelectedParticipant(p)}
+                      >
+                        {p.name}
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {selectedParticipant && (
+                    <div className="selected-marking-actions fade-in">
+                      <p>Marking <strong>{selectedParticipant.name}</strong>:</p>
+                      <div className="oral-marking-controls">
+                        <button
+                          onClick={() => {
+                            socket.emit('mark-participant-oral', { 
+                              questionId: currentQuestion.id,
+                              participantId: selectedParticipant.id,
+                              isCorrect: true
+                            });
+                            setSelectedParticipant(null);
+                          }}
+                          className="control-btn correct-btn-large"
+                        >
+                          Correct ✅
+                        </button>
+                        <button
+                          onClick={() => {
+                            socket.emit('mark-participant-oral', { 
+                              questionId: currentQuestion.id,
+                              participantId: selectedParticipant.id,
+                              isCorrect: false
+                            });
+                            setSelectedParticipant(null);
+                          }}
+                          className="control-btn incorrect-btn-large"
+                        >
+                          Wrong ❌
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="oral-buzzer-info card-gradient">
+                   <div className="waiting-buzz">
+                    <div className="pulse-icon">🎤</div>
+                    <p>{showResults ? 'Answered Orally' : 'Listen to Host'}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="answer-grid-tv">
+              {currentQuestion.options.map((option, index) => (
+                <div
+                  key={index}
+                  className={`answer-card-tv ${showResults && option === currentQuestion.correctAnswer ? 'correct' : ''} ${showResults && option !== currentQuestion.correctAnswer ? 'dimmed' : ''}`}
+                  style={{
+                    '--option-color': optionColors[index],
+                    animationDelay: `${index * 100}ms`
+                  }}
+                >
+                  <div className="option-label-tv">{optionLabels[index]}</div>
+                  <div className="option-content-tv">
+                    {currentQuestion.optionImages && currentQuestion.optionImages[index] && (
+                      <img src={currentQuestion.optionImages[index]} alt="" className="option-image-tv" />
+                    )}
+                    <div className="option-text-tv">{option}</div>
+                  </div>
+                  {showResults && option === currentQuestion.correctAnswer && (
+                    <div className="correct-indicator">✓</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
           
           {/* Host Controls */}
           {userRole === 'host' && (
             <div className="host-controls">
-              {!showResults ? (
+              {currentQuestion.type === 'ORAL_BUZZER' && buzzerWinner && !showResults && (
+                <div className="oral-marking-controls">
+                  <button
+                    onClick={() => socket.emit('mark-buzzer-correct', { 
+                      questionId: currentQuestion.id,
+                      participantId: buzzerWinner.participantId 
+                    })}
+                    className="control-btn correct-btn-large"
+                  >
+                    Mark Correct ✅
+                  </button>
+                  <button
+                    onClick={() => socket.emit('mark-buzzer-incorrect', { 
+                      questionId: currentQuestion.id,
+                      participantId: buzzerWinner.participantId 
+                    })}
+                    className="control-btn incorrect-btn-large"
+                  >
+                    Mark Wrong ❌
+                  </button>
+                </div>
+              )}
+
+              {currentQuestion.type !== 'ORAL_BUZZER' && currentQuestion.type !== 'ORAL_OPEN' && !showResults && (
                 <button
                   onClick={() => socket.emit('show-results')}
                   className="control-btn results-btn"
                 >
                   Show Answer 👁️
                 </button>
-              ) : (
+              )}
+
+              {showResults && (
                 <button
                   onClick={() => socket.emit('next-question')}
                   className="control-btn next-btn"
@@ -265,7 +455,6 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager }) {
               >
                 End Quiz ⏹️
               </button>
-
             </div>
           )}
 

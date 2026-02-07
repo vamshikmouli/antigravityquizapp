@@ -1,4 +1,28 @@
+.top-left-back-btn {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 10px 20px !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 12px !important;
+  color: white !important;
+  text-decoration: none !important;
+  font-weight: 600 !important;
+  font-size: 1rem !important;
+  transition: all 0.2s ease !important;
+  cursor: pointer !important;
+  margin-right: 20px !important;
+}
+
+.top-left-back-btn:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  transform: translateX(-5px) !important;
+  border-color: var(--color-primary) !important;
+}
+
 /* Modern Question Manager CSS */
+
 :root {
   --bg-dark: #1e1e24;
   --bg-card: #2b2d42;

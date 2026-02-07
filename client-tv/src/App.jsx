@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import JoinSession from './components/JoinSession'
 import WaitingLobby from './components/WaitingLobby'
 import QuestionDisplay from './components/QuestionDisplay'
@@ -65,6 +65,7 @@ const LobbyConnect = ({ socket, onJoinSuccess }) => {
 };
 
 function AppContent() {
+  const navigate = useNavigate()
   const [sessionCode, setSessionCode] = useState(null)
   const [sessionData, setSessionData] = useState(null)
   const [quizStatus, setQuizStatus] = useState('waiting')
@@ -78,6 +79,14 @@ function AppContent() {
     setSessionCode(code)
     setSessionData(session)
     setUserRole(role)
+  }
+
+  const handleExitSession = () => {
+    setSessionCode(null)
+    setSessionData(null)
+    setQuizStatus('waiting')
+    setFinalAnalytics(null)
+    navigate('/dashboard')
   }
 
   // Initialize Audio
@@ -148,7 +157,12 @@ function AppContent() {
               </div>
             ) : (
               finalAnalytics ? (
-                <FinalResultsDisplay audioManager={audioManager.current} analytics={finalAnalytics} sessionCode={sessionCode} />
+                <FinalResultsDisplay 
+                  audioManager={audioManager.current} 
+                  analytics={finalAnalytics} 
+                  sessionCode={sessionCode} 
+                  onClose={handleExitSession}
+                />
               ) : (
                 <QuestionDisplay audioManager={audioManager.current} socket={socket} sessionData={sessionData} userRole={userRole} />
               )
