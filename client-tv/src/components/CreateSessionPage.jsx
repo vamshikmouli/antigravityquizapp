@@ -129,19 +129,27 @@ function CreateSessionPage() {
           )}
         </div>
 
-        <div className="wizard-step" style={{ marginTop: '30px' }}>
-          <h2 style={{ fontSize: '1.4rem' }}>Session Settings</h2>
-          <div className="card-glass" style={{ padding: '20px', borderRadius: '20px', marginTop: '15px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+        <div className="wizard-step" style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <h2 style={{ fontSize: '1.1rem', marginBottom: '8px', width: '100%', maxWidth: '500px' }}>Session Settings</h2>
+          <div className="card-glass" style={{ 
+            padding: '12px 18px', 
+            borderRadius: '14px', 
+            width: '100%',
+            maxWidth: '500px',
+            background: 'rgba(255, 255, 255, 0.02)',
+            border: '1px solid rgba(255, 255, 255, 0.05)',
+            margin: '0 auto'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
               <div>
-                <h3 style={{ margin: 0 }}>🎵 Background Music</h3>
-                <p style={{ opacity: 0.7, margin: '5px 0 0 0' }}>Play music during the quiz on this screen</p>
+                <h3 style={{ margin: 0, fontSize: '0.95rem' }}>🎵 Background Music</h3>
+                <p style={{ opacity: 0.6, fontSize: '0.8rem', margin: '2px 0 0 0' }}>Play quiz music on this screen</p>
               </div>
               <label className="switch" style={{ 
                 position: 'relative', 
                 display: 'inline-block', 
-                width: '60px', 
-                height: '34px' 
+                width: '44px', 
+                height: '24px' 
               }}>
                 <input 
                   type="checkbox" 
@@ -153,31 +161,31 @@ function CreateSessionPage() {
                   position: 'absolute',
                   cursor: 'pointer',
                   top: 0, left: 0, right: 0, bottom: 0,
-                  backgroundColor: musicEnabled ? 'var(--color-primary)' : '#ccc',
-                  transition: '.4s',
-                  borderRadius: '34px'
+                  backgroundColor: musicEnabled ? 'var(--color-primary)' : '#333',
+                  transition: '.3s',
+                  borderRadius: '24px'
                 }}>
                   <span style={{
                     position: 'absolute',
                     content: '""',
-                    height: '26px',
-                    width: '26px',
-                    left: '4px',
-                    bottom: '4px',
+                    height: '18px',
+                    width: '18px',
+                    left: '3px',
+                    bottom: '3px',
                     backgroundColor: 'white',
-                    transition: '.4s',
+                    transition: '.3s',
                     borderRadius: '50%',
-                    transform: musicEnabled ? 'translateX(26px)' : 'none'
+                    transform: musicEnabled ? 'translateX(20px)' : 'none'
                   }}></span>
                 </span>
               </label>
             </div>
 
             {musicEnabled && (
-              <div style={{ marginTop: '20px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-                  <span>Volume</span>
-                  <span>{musicVolume}%</span>
+              <div style={{ marginTop: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '0.9rem' }}>
+                  <span style={{ opacity: 0.7 }}>Volume</span>
+                  <span style={{ fontWeight: 'bold', color: 'var(--color-primary)' }}>{musicVolume}%</span>
                 </div>
                 <input 
                   type="range" 
@@ -185,13 +193,13 @@ function CreateSessionPage() {
                   max="100" 
                   value={musicVolume} 
                   onChange={(e) => setMusicVolume(parseInt(e.target.value))}
-                  style={{ width: '100%', cursor: 'pointer' }}
+                  style={{ width: '100%', cursor: 'pointer', accentColor: 'var(--color-primary)' }}
                 />
               </div>
             )}
             
-            <div style={{ marginTop: '20px', padding: '15px', background: 'rgba(255,255,255,0.05)', borderRadius: '12px', fontSize: '0.9rem' }}>
-              <p>💡 Make sure you have uploaded music tracks in the <strong>Music Settings</strong> page from the dashboard.</p>
+            <div style={{ marginTop: '15px', padding: '10px 15px', background: 'rgba(255,255,255,0.04)', borderRadius: '10px', fontSize: '0.8rem', border: '1px solid rgba(255,255,255,0.05)' }}>
+              <p style={{ margin: 0, opacity: 0.8 }}>💡 Make sure you have uploaded music tracks in the <strong>Music Settings</strong> page.</p>
             </div>
           </div>
         </div>

@@ -235,7 +235,7 @@ function AppContent() {
 
 function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/display">
       <AuthProvider>
         <AppContent />
       </AuthProvider>

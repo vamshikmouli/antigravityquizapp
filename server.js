@@ -1150,45 +1150,39 @@ const mobileDistPath = path.resolve(__dirname, 'client-mobile', 'dist');
 // Middleware to log asset requests for debugging
 app.use((req, res, next) => {
   if (req.path.includes('.')) {
-    console.log(`[Asset] ${req.method} ${req.path}`);
+    // console.log(`[Asset] ${req.method} ${req.path}`);
   }
   next();
 });
 
-// 1. Explicitly serve assets for the Play screen
-// Requests for /play/assets/... will be served from client-mobile/dist/assets
-app.use('/play/assets', express.static(path.join(mobileDistPath, 'assets')));
-
-// 2. Explicitly serve root assets (for the TV screen / Admin)
-// Requests for /assets/... will be served from client-tv/dist/assets
-app.use('/assets', express.static(path.join(tvDistPath, 'assets')));
-
-// 2.5 Serve templates
+// Serve templates (independent of apps)
 app.use('/templates', express.static(path.join(__dirname, 'public', 'templates')));
 
-// 3. Serve the Student Play screen at /play
-app.get('/play', (req, res) => {
-  res.sendFile(path.join(mobileDistPath, 'index.html'));
-});
 
-// 4. Handle sub-routes under /play (for client-side routing)
-app.get('/play/*', (req, res) => {
-  // If request has a file extension, it's a missing asset, don't fallback to index.html
+// 1. Serve TV App (Display/Host) at /display
+// ----------------------------------------------------------------
+// This handles /display/assets/... and /display/index.html because base is '/display/'
+app.use('/display', express.static(tvDistPath));
+
+// Handle sub-routes for TV App SPA
+app.get('/display/*', (req, res) => {
   if (req.path.includes('.')) {
     return res.status(404).send('Not found');
   }
-  res.sendFile(path.join(mobileDistPath, 'index.html'));
+  res.sendFile(path.join(tvDistPath, 'index.html'));
 });
 
-// 5. Serve TV Display / Admin app at root
-// This serves all other static files (like /favicon.ico) from the TV dist
-app.use(express.static(tvDistPath, { index: false }));
 
-// 6. Catch-all for TV Display / Admin app
+// 2. Serve Mobile App (Student) at Root /
+// ----------------------------------------------------------------
+// This handles /assets/... and /index.html because base is '/'
+app.use(express.static(mobileDistPath));
+
+// Catch-all for Mobile App SPA
 app.get('*', (req, res) => {
   // Only serve index.html if it's not an API route and not a request for a static asset
   if (!req.path.startsWith('/api') && !req.path.includes('.')) {
-    res.sendFile(path.join(tvDistPath, 'index.html'));
+    res.sendFile(path.join(mobileDistPath, 'index.html'));
   } else if (!req.path.startsWith('/api')) {
     res.status(404).send('Not found');
   }

@@ -135,3 +135,11 @@
   color: var(--color-option-a);
   font-weight: 600;
 }
+
+.you-badge {
+  margin-left: 8px;
+  font-size: 0.9em;
+  opacity: 0.9;
+  font-weight: 700;
+  color: #FFD93D;
+}

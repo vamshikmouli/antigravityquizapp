@@ -61,7 +61,7 @@ function LobbyScreen({ socket, participantData }) {
                   style={{ animationDelay: `${index * 50}ms` }}
                 >
                   {p.name}
-                  {p.id === participantData?.id && <span className="you-badge">You</span>}
+                  {p.id === participantData?.id && <span className="you-badge">(You)</span>}
                 </div>
               ))}
             </div>
