@@ -71,24 +71,75 @@ function AppContent() {
   const [quizStatus, setQuizStatus] = useState('waiting')
   const [userRole, setUserRole] = useState('display')
   const [finalAnalytics, setFinalAnalytics] = useState(null)
+  const [initialGameState, setInitialGameState] = useState(null)
   
   const { socket, connected, error } = useWebSocket()
   const audioManager = useRef(new AudioManager())
   
-  const handleJoinSuccess = (code, session, role = 'display') => {
+  const handleJoinSuccess = (code, session, role = 'display', currentGameState = null) => {
     setSessionCode(code)
     setSessionData(session)
     setUserRole(role)
+    
+    // Save to localStorage for rejoining
+    localStorage.setItem('admin-quiz-session', JSON.stringify({
+      code: session.code,
+      role: role
+    }))
+
+    if (currentGameState) {
+      setInitialGameState(currentGameState)
+    }
+
+    // Sync quiz status
+    if (session.status === 'ACTIVE') {
+      setQuizStatus('active')
+    } else if (session.status === 'COMPLETED') {
+      setQuizStatus('completed')
+      // If we joined a completed session, we might already have analytics
+      if (session.analytics) {
+        setFinalAnalytics(session.analytics)
+      }
+    }
   }
 
   const handleExitSession = () => {
+    localStorage.removeItem('admin-quiz-session')
     setSessionCode(null)
     setSessionData(null)
     setQuizStatus('waiting')
     setFinalAnalytics(null)
+    setInitialGameState(null)
     navigate('/dashboard')
   }
 
+  // Auto-rejoin on mount/connect
+  useEffect(() => {
+    if (!socket || !connected) return
+    
+    const savedSession = localStorage.getItem('admin-quiz-session')
+    if (savedSession) {
+      try {
+        const { code, role } = JSON.parse(savedSession)
+        console.log('Admin App: Re-establishing session:', code)
+        
+        socket.emit('join-session', {
+          code,
+          role
+        })
+        
+        const handleRejoin = (data) => {
+          handleJoinSuccess(data.session.code, data.session, role, data.currentGameState)
+        }
+        
+        socket.once('session-joined', handleRejoin)
+      } catch (err) {
+        console.error('Admin App: Failed to parse saved session:', err)
+        localStorage.removeItem('admin-quiz-session')
+      }
+    }
+  }, [socket, connected])
+  
   // Initialize Audio
   useEffect(() => {
     if (!sessionData?.host?.musicTracks) return
@@ -164,7 +215,13 @@ function AppContent() {
                   onClose={handleExitSession}
                 />
               ) : (
-                <QuestionDisplay audioManager={audioManager.current} socket={socket} sessionData={sessionData} userRole={userRole} />
+                <QuestionDisplay 
+                  audioManager={audioManager.current} 
+                  socket={socket} 
+                  sessionData={sessionData} 
+                  userRole={userRole} 
+                  initialGameState={initialGameState}
+                />
               )
             )
           } />

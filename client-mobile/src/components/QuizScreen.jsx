@@ -169,7 +169,12 @@ function QuizScreen({ socket, participantData, initialGameState }) {
           }
 
           setTimeRemaining(remaining)
-          if (remaining === 0) clearInterval(timerRef.current)
+          if (remaining === 0) {
+            clearInterval(timerRef.current)
+            if (timerPhase === 'QUESTION' || timerPhase === 'BUZZER') {
+              setCanAnswer(false)
+            }
+          }
         }
       }
     }, 100)
@@ -219,20 +224,36 @@ function QuizScreen({ socket, participantData, initialGameState }) {
     <div className="quiz-screen fade-in">
       {/* Header */}
       <div className="quiz-header">
-        <div className="quiz-info">
-          <span className="question-number">
-            Q{currentQuestion.questionNumber}/{currentQuestion.totalQuestions}
-          </span>
-          <span className="round-badge">Round {currentQuestion.round}</span>
-        </div>
-        <div className="score-info">
-          <div className="score">
-            <span className="score-label">Score:</span>
-            <span className="score-value">{score}</span>
+        <div className="header-left">
+          <div className="header-top-row">
+            <div className="question-badge">
+              <span className="q-label">Q</span>
+              <span className="q-numbers">{currentQuestion.questionNumber}/{currentQuestion.totalQuestions}</span>
+            </div>
+            <div className="round-info-badge">
+              R{currentQuestion.round}
+            </div>
           </div>
+          
+          <div className="header-bottom-row">
+            <div className="stat-badge score-badge">
+              <div className="stat-icon">💰</div>
+              <div className="stat-details">
+                <span className="stat-label">SCORE</span>
+                <span className="stat-value">{score}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="header-right">
           {rank && (
-            <div className="rank">
-              Rank #{rank}
+            <div className="stat-badge rank-badge">
+              <div className="stat-icon">🏆</div>
+              <div className="stat-details">
+                <span className="stat-label">RANK</span>
+                <span className="stat-value">#{rank}</span>
+              </div>
             </div>
           )}
         </div>
@@ -376,6 +397,17 @@ function QuizScreen({ socket, participantData, initialGameState }) {
         </div>
       )}
       
+      {/* Time's Up Overlay */}
+      {timeRemaining === 0 && !answerSubmitted && !feedback && (
+        <div className="times-up-overlay fade-in">
+          <div className="times-up-content">
+            <div className="alarm-icon">⏳</div>
+            <h2>TIME'S UP!</h2>
+            <p>You didn't submit an answer in time.</p>
+          </div>
+        </div>
+      )}
+
       {/* Waiting for results */}
       {answerSubmitted && !feedback && (
         <div className="waiting-results">

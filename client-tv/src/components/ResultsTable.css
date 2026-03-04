@@ -13,10 +13,10 @@
 
 .results-table th, 
 .results-table td {
-  padding: 30px 20px;
+  padding: 10px 15px; /* Reduced from 30px 20px */
   text-align: left;
   border-bottom: 2px solid rgba(255, 255, 255, 0.1);
-  font-size: 36px; /* Massive text */
+  font-size: 18px; /* Reduced from 36px */
 }
 
 .results-table th {
@@ -27,15 +27,15 @@
   color: #FFD93D;
 }
 
-.rank-col { width: 100px; text-align: center; }
-.name-col { min-width: 400px; }
-.round-col { text-align: center; width: 150px; }
-.total-col { text-align: right; width: 250px; color: #6bcf72; }
+.rank-col { width: 50px; text-align: center; }
+.name-col { min-width: 200px; }
+.round-col { text-align: center; width: 80px; }
+.total-col { text-align: right; width: 120px; color: #6bcf72; }
 
 .rank-cell { text-align: center; font-weight: 900; }
 .name-cell { font-weight: 700; white-space: nowrap; }
 .score-cell { text-align: center; font-family: 'JetBrains Mono', monospace; opacity: 0.8; }
-.total-cell { text-align: right; font-weight: 900; color: #6bcf72; font-size: 48px !important; }
+.total-cell { text-align: right; font-weight: 900; color: #6bcf72; font-size: 22px !important; }
 
 /* Podium Highlights in Table */
 .top-row {

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import './LobbyScreen.css'
 
-function LobbyScreen({ socket, participantData }) {
+function LobbyScreen({ socket, participantData, onExit }) {
   const [participants, setParticipants] = useState([])
   
   useEffect(() => {
@@ -33,7 +33,12 @@ function LobbyScreen({ socket, participantData }) {
     <div className="lobby-screen fade-in">
       <div className="lobby-header">
         <h1>Waiting for Quiz to Start...</h1>
-        <p className="participant-name">Welcome, {participantData?.name}!</p>
+        <div className="header-actions">
+          <p className="participant-name">Welcome, {participantData?.name}!</p>
+          <button className="exit-quiz-btn" onClick={onExit} title="Leave Quiz">
+            Exit Quiz 🚪
+          </button>
+        </div>
       </div>
       
       <div className="lobby-content">

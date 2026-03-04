@@ -476,16 +476,16 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
           if (!participant) {
             const sanitizedName = sanitizeStudentName(name);
             participant = await sessionController.addParticipant(session.id, sanitizedName);
-            
-            // Notify everyone that a new participant joined
-            io.to(session.code).emit(SOCKET_EVENTS.PARTICIPANT_JOINED, {
-              participant: {
-                id: participant.id,
-                name: participant.name,
-                score: participant.score
-              }
-            });
           }
+          
+          // Notify everyone that a participant joined/rejoined
+          io.to(session.code).emit(SOCKET_EVENTS.PARTICIPANT_JOINED, {
+            participant: {
+              id: participant.id,
+              name: participant.name,
+              score: participant.score
+            }
+          });
           
           socket.data.participantId = participant.id;
           socket.data.participantName = participant.name;
@@ -537,6 +537,16 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
         }
       } else {
         // Host or display joined
+        let analytics = null;
+        if (session.status === SESSION_STATUS.COMPLETED) {
+          analytics = await analyticsController.getAnalytics(session.id);
+        }
+
+        let currentGameState = null;
+        if (session.status === SESSION_STATUS.ACTIVE && activeSessions.has(session.code)) {
+          currentGameState = activeSessions.get(session.code);
+        }
+
         socket.emit(SOCKET_EVENTS.SESSION_JOINED, {
           session: {
             id: session.id,
@@ -545,10 +555,11 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
             currentQuestionIndex: session.currentQuestionIndex,
             musicEnabled: session.musicEnabled,
             musicVolume: session.musicVolume,
-            host: session.host
+            host: session.host,
+            analytics // Include analytics here
           },
           // Send current question if active
-          currentGameState: activeSessions.get(session.code) || null
+          currentGameState
         });
       }
       
@@ -556,6 +567,14 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
       const participants = await sessionController.getParticipants(session.id);
       socket.emit('participants-list', { participants });
       
+      // Send current leaderboard to host/display rejoining
+      if (role !== 'student') {
+        const rankings = calculateRankings(participants);
+        socket.emit(SOCKET_EVENTS.LEADERBOARD_UPDATE, {
+          leaderboard: rankings
+        });
+      }
+
       // If session is completed, send analytics immediately
       if (session.status === SESSION_STATUS.COMPLETED) {
         const analytics = await analyticsController.getAnalytics(session.id);
@@ -570,6 +589,43 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
     }
   });
   
+  socket.on(SOCKET_EVENTS.REMOVE_PARTICIPANT, async (data) => {
+    try {
+      const { participantId } = data;
+      const { sessionId, sessionCode, role } = socket.data;
+
+      if (role !== 'host') {
+        socket.emit(SOCKET_EVENTS.ERROR, { message: 'Only host can remove participants' });
+        return;
+      }
+
+      console.log(`[Session] Removing participant ${participantId} from ${sessionCode}`);
+
+      // Notify the specific student before deletion
+      const allSockets = await io.in(sessionCode).fetchSockets();
+      const studentSocket = allSockets.find(s => s.data.participantId === participantId);
+      
+      if (studentSocket) {
+        studentSocket.emit(SOCKET_EVENTS.SESSION_KICKED, { message: 'You have been removed by the host' });
+        studentSocket.leave(sessionCode);
+      }
+
+      // Delete from database
+      await sessionController.removeParticipant(participantId);
+
+      // Notify everyone
+      io.to(sessionCode).emit(SOCKET_EVENTS.PARTICIPANT_REMOVED, { participantId });
+      
+      // Send updated list
+      const participants = await sessionController.getParticipants(sessionId);
+      io.to(sessionCode).emit('participants-list', { participants });
+
+    } catch (error) {
+      console.error('Error removing participant:', error);
+      socket.emit(SOCKET_EVENTS.ERROR, { message: 'Failed to remove participant' });
+    }
+  });
+
   // ========================================
   // QUIZ CONTROL (Host only)
   // ========================================

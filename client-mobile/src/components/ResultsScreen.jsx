@@ -144,7 +144,7 @@ function ResultsScreen({ socket, participantData }) {
         <button 
           onClick={() => {
             localStorage.removeItem('quiz-session');
-            window.location.href = '/play';
+            window.location.href = '/';
           }} 
           className="play-again-btn"
         >

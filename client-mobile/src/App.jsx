@@ -14,20 +14,40 @@ function App() {
   
   const { socket, connected, error } = useWebSocket()
   
-  const handleJoinSuccess = (code, participant, currentGameState) => {
-    setSessionCode(code)
+  const handleJoinSuccess = (data) => {
+    const { session, participant, currentGameState } = data
+    setSessionCode(session.code)
     setParticipantData(participant)
     
     // Save to localStorage for rejoining
     localStorage.setItem('quiz-session', JSON.stringify({
-      code,
+      code: session.code,
       participantId: participant.id,
       name: participant.name
     }))
 
     if (currentGameState) {
       setInitialGameState(currentGameState)
-      setQuizStatus(currentGameState.question ? 'active' : 'waiting')
+    }
+
+    // Sync status
+    if (session.status === 'ACTIVE') {
+      setQuizStatus('active')
+    } else if (session.status === 'COMPLETED') {
+      setQuizStatus('completed')
+    } else {
+      setQuizStatus('waiting')
+    }
+  }
+
+  const handleExitSession = () => {
+    localStorage.removeItem('quiz-session')
+    setSessionCode(null)
+    setParticipantData(null)
+    setQuizStatus('waiting')
+    setInitialGameState(null)
+    if (socket) {
+      socket.emit('leave-session')
     }
   }
   
@@ -54,9 +74,7 @@ function App() {
         // We use .on instead of .once here in case of multiple reconnections,
         // but it's better to just handle the response
         const handleRejoin = (data) => {
-          handleJoinSuccess(data.session.code, data.participant, data.currentGameState)
-          if (data.session.status === 'ACTIVE') setQuizStatus('active')
-          if (data.session.status === 'COMPLETED') setQuizStatus('completed')
+          handleJoinSuccess(data)
         }
         
         socket.once('session-joined', handleRejoin)
@@ -81,10 +99,16 @@ function App() {
       console.log('[Quiz] End signal received', data);
       setQuizStatus('completed')
     })
+
+    socket.on('session-kicked', (data) => {
+      alert(data.message || 'You have been removed from the session');
+      handleExitSession();
+    })
     
     return () => {
       socket.off('start-quiz')
       socket.off('end-quiz')
+      socket.off('session-kicked')
     }
   }, [socket])
   
@@ -142,7 +166,11 @@ function App() {
               sessionCode ? 
                 (quizStatus === 'completed' ? <Navigate to="/results" /> : 
                  quizStatus === 'active' ? <Navigate to="/quiz" /> : 
-                 <LobbyScreen socket={socket} participantData={participantData} />) : 
+                 <LobbyScreen 
+                   socket={socket} 
+                   participantData={participantData} 
+                   onExit={handleExitSession}
+                 />) : 
                 <Navigate to="/" />
             } 
           />

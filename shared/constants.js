@@ -64,6 +64,11 @@ export const SOCKET_EVENTS = {
   // Analytics
   ANALYTICS_READY: 'analytics-ready',
   
+  // Participant Actions
+  REMOVE_PARTICIPANT: 'remove-participant',
+  PARTICIPANT_REMOVED: 'participant-removed',
+  SESSION_KICKED: 'session-kicked',
+  
   // Errors
   ERROR: 'error'
 };

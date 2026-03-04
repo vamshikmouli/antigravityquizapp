@@ -2,14 +2,33 @@ import { useState, useEffect, useRef } from 'react'
 import Leaderboard from './Leaderboard'
 import FinalResultsDisplay from './FinalResultsDisplay'
 import { SOCKET_EVENTS, TIME_LIMITS } from '../../../shared/constants'
+import MusicControls from './MusicControls'
 import './QuestionDisplay.css'
 
-function QuestionDisplay({ socket, sessionData, userRole, audioManager }) {
-  const [currentQuestion, setCurrentQuestion] = useState(null)
-  const [questionStartTime, setQuestionStartTime] = useState(null)
-  const [timeRemaining, setTimeRemaining] = useState(0)
-  const [totalTime, setTotalTime] = useState(0)
-  const [timerPhase, setTimerPhase] = useState('READING') // 'READING', 'QUESTION', 'BUZZER'
+function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialGameState }) {
+  const [currentQuestion, setCurrentQuestion] = useState(initialGameState?.currentQuestion || null)
+  const [questionStartTime, setQuestionStartTime] = useState(initialGameState?.startTime || null)
+  const [timerPhase, setTimerPhase] = useState(() => {
+    if (!initialGameState) return 'READING';
+    const totalElapsed = Math.floor((Date.now() - initialGameState.startTime) / 1000);
+    const readingTime = initialGameState.currentQuestion.readingTime || 0;
+    return totalElapsed < readingTime ? 'READING' : 'QUESTION';
+  })
+  const [timeRemaining, setTimeRemaining] = useState(() => {
+    if (!initialGameState) return 0;
+    const totalElapsed = Math.floor((Date.now() - initialGameState.startTime) / 1000);
+    const readingTime = initialGameState.currentQuestion.readingTime || 0;
+    if (totalElapsed < readingTime) return readingTime - totalElapsed;
+    const questionElapsed = totalElapsed - readingTime;
+    return Math.max(0, initialGameState.currentQuestion.timeLimit - questionElapsed);
+  })
+  const [totalTime, setTotalTime] = useState(() => {
+    if (!initialGameState) return 0;
+    const totalElapsed = Math.floor((Date.now() - initialGameState.startTime) / 1000);
+    const readingTime = initialGameState.currentQuestion.readingTime || 0;
+    return totalElapsed < readingTime ? readingTime : initialGameState.currentQuestion.timeLimit;
+  })
+  
   const [buzzerWinner, setBuzzerWinner] = useState(null)
   const [buzzerStartTime, setBuzzerStartTime] = useState(null)
   const [isBuzzerPhase, setIsBuzzerPhase] = useState(false)
@@ -21,6 +40,14 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager }) {
   const [participants, setParticipants] = useState([]);
   const [selectedParticipant, setSelectedParticipant] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Floating Timer State
+  const [timerPos, setTimerPos] = useState({ x: 1000, y: 100 });
+  const [timerScale, setTimerScale] = useState(1);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const timerDragRef = useRef(null);
 
   const timerRef = useRef(null)
 
@@ -180,6 +207,52 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager }) {
       }
     }
   }, [currentQuestion, questionStartTime, isBuzzerPhase, buzzerStartTime, timerPhase])
+
+  // Dragging Logic
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (isDragging) {
+        setTimerPos({
+          x: e.clientX - dragOffset.x,
+          y: e.clientY - dragOffset.y
+        });
+      }
+      if (isResizing) {
+        const rect = timerDragRef.current.getBoundingClientRect();
+        const newScale = Math.max(0.5, Math.min(3, (e.clientX - rect.left) / 100)); // Simple scale logic
+        setTimerScale(newScale);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      setIsResizing(false);
+    };
+
+    if (isDragging || isResizing) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, isResizing, dragOffset]);
+
+  const startDrag = (e) => {
+    if (e.target.classList.contains('resize-handle')) return;
+    setIsDragging(true);
+    setDragOffset({
+      x: e.clientX - timerPos.x,
+      y: e.clientY - timerPos.y
+    });
+  };
+
+  const startResize = (e) => {
+    e.stopPropagation();
+    setIsResizing(true);
+  };
   
   if (!currentQuestion) {
     return (
@@ -239,40 +312,26 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager }) {
               </span>
               <span className="round-badge-tv">Round {currentQuestion.round}</span>
             </div>
-            <div className="points-display">
-              <span className="points-value">+{currentQuestion.points}</span>
-              {currentQuestion.negativePoints > 0 && (
-                <span className="negative-value">-{currentQuestion.negativePoints}</span>
+            <div className="header-actions">
+              <div className="points-display">
+                <span className="points-value">+{currentQuestion.points}</span>
+                {currentQuestion.negativePoints > 0 && (
+                  <span className="negative-value">-{currentQuestion.negativePoints}</span>
+                )}
+              </div>
+              
+              {userRole === 'host' && (
+                <button
+                  onClick={() => socket.emit('end-quiz')}
+                  className="control-btn end-btn header-end-quiz"
+                  title="End Quiz"
+                >
+                  ⏹️
+                </button>
               )}
             </div>
           </div>
           
-          {/* Circular Timer */}
-          <div className={`timer-circular-container ${timerPhase.toLowerCase()}-phase`}>
-            <svg className="timer-svg" viewBox="0 0 100 100">
-              <circle className="timer-bg" cx="50" cy="50" r="45" />
-              <circle 
-                className="timer-progress" 
-                cx="50" 
-                cy="50" 
-                r="45"
-                style={{
-                  strokeDashoffset: 283 - (283 * (timeRemaining / (totalTime || 1))),
-                  stroke: timeRemaining <= 3 ? 'var(--color-error)' : 
-                          timerPhase === 'READING' ? '#3498db' :
-                          timerPhase === 'BUZZER' ? 'var(--color-warning)' :
-                          'var(--color-success)'
-                }}
-              />
-            </svg>
-            <div className="timer-content-tv">
-              <span className="timer-digits">{timeRemaining}</span>
-              <span className="timer-unit">
-                {timerPhase === 'READING' ? 'READING' : 
-                 timerPhase === 'BUZZER' ? 'ANSWER' : 'SEC'}
-              </span>
-            </div>
-          </div>
           
           {/* Question */}
           <div className="question-card card-gradient">
@@ -284,24 +343,26 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager }) {
             <h2 className="question-text-tv">{currentQuestion.text}</h2>
           </div>
 
-          {/* Explicit Correct Answer Reveal */}
-          {showResults && (currentQuestion.type === 'SHORT_ANSWER' || currentQuestion.type === 'BUZZER' || currentQuestion.type === 'TRUE_FALSE' || currentQuestion.type === 'ORAL_BUZZER' || currentQuestion.type === 'ORAL_OPEN') && (
-            <div className="revealed-answer-container fade-in">
-              <div className="revealed-answer-label">CORRECT ANSWER</div>
-              <div className="revealed-answer-box">
-                {currentQuestion.correctAnswer || 'N/A'}
-              </div>
-            </div>
-          )}
-          
-          {/* Buzzer Winner Display */}
-          {buzzerWinner && (
-            <div className="buzzer-winner-tv slide-in-left">
-              <div className="winner-icon">🏆</div>
-              <div className="winner-info">
-                <div className="winner-label">First to Buzz!</div>
-                <div className="winner-name">{buzzerWinner.participantName}</div>
-              </div>
+          {/* Row for Correct Answer and Buzzer Winner */}
+          {(showResults || buzzerWinner) && (
+            <div className="results-row-wrapper">
+              {/* Explicit Correct Answer Reveal */}
+              {showResults && (currentQuestion.type === 'SHORT_ANSWER' || currentQuestion.type === 'BUZZER' || currentQuestion.type === 'TRUE_FALSE' || currentQuestion.type === 'ORAL_BUZZER' || currentQuestion.type === 'ORAL_OPEN') && (
+                <div className="revealed-answer-container fade-in">
+                  <div className="revealed-answer-label">CORRECT ANSWER</div>
+                  <div className="revealed-answer-box">
+                    {currentQuestion.correctAnswer || 'N/A'}
+                  </div>
+                </div>
+              )}
+              
+              {/* Buzzer Winner Display - Compact One Line */}
+              {buzzerWinner && (
+                <div className="buzzer-winner-compact slide-in-left">
+                  <span className="winner-label-compact">🏆 First to Buzz! </span>
+                  <span className="winner-name-compact">{buzzerWinner.participantName}</span>
+                </div>
+              )}
             </div>
           )}
           
@@ -458,46 +519,45 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager }) {
                   Next Question ⏭️
                 </button>
               )}
-              
-              <button
-                onClick={() => socket.emit('end-quiz')}
-                className="control-btn end-btn"
-              >
-                End Quiz ⏹️
-              </button>
+
+              {/* Inline Results Stats */}
+              {showResults && questionResults && (
+                <div className="results-summary-inline">
+                  <div className="res-stat"><span className="stat-label">✅</span> {questionResults.correctCount}</div>
+                  <div className="res-stat"><span className="stat-label">❌</span> {questionResults.incorrectCount}</div>
+                </div>
+              )}
             </div>
           )}
 
-          {/* Results Summary */}
-          {showResults && questionResults && (
-            <div className="results-summary slide-in-left">
-              <div className="result-row">
-                 <div className="result-stat">
-                  <div className="stat-icon">✅</div>
-                  <div className="stat-text">
-                    <span className="stat-val">{questionResults.correctCount}</span> Correct
-                  </div>
-                </div>
-                 <div className="result-stat">
-                  <div className="stat-icon">❌</div>
-                  <div className="stat-text">
-                    <span className="stat-val">{questionResults.incorrectCount}</span> Wrong
-                  </div>
-                </div>
-              </div>
-              
-              {userRole === 'host' && (
-                <div className="host-names-list">
-                   <div className="correct-names">
-                      <strong>Correct:</strong> {questionResults.correctNames.join(', ') || 'None'}
-                   </div>
-                   {questionResults.incorrectNames.length > 0 && (
-                     <div className="incorrect-names">
-                        <strong>Incorrect:</strong> {questionResults.incorrectNames.join(', ')}
-                     </div>
-                   )}
-                </div>
-              )}
+          {/* Floating Draggable Timer */}
+          <div 
+            ref={timerDragRef}
+            className={`floating-timer ${timerPhase.toLowerCase()}-phase ${isDragging ? 'dragging' : ''}`}
+            style={{ 
+              left: `${timerPos.x}px`, 
+              top: `${timerPos.y}px`,
+              transform: `scale(${timerScale})`
+            }}
+            onMouseDown={startDrag}
+          >
+            <div className="timer-val">{timeRemaining}</div>
+            <div className="timer-lbl">
+              {timerPhase === 'READING' ? 'READ' : 
+               timerPhase === 'BUZZER' ? 'BUZZ' : 'SEC'}
+            </div>
+            <div className="resize-handle" onMouseDown={startResize}></div>
+          </div>
+
+          {/* Detailed Results (Names) - Kept separate but shrunken */}
+          {showResults && questionResults && userRole === 'host' && (
+            <div className="detailed-results-host slide-in-bottom">
+               <div className="names-row">
+                  <span className="names-correct"><strong>✓</strong> {questionResults.correctNames.join(', ') || 'None'}</span>
+                  {questionResults.incorrectNames.length > 0 && (
+                    <span className="names-incorrect"><strong>✗</strong> {questionResults.incorrectNames.join(', ')}</span>
+                  )}
+               </div>
             </div>
           )}
         </div>
@@ -507,6 +567,9 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager }) {
           <Leaderboard leaderboard={leaderboard} buzzerWinner={buzzerWinner} />
         </div>
       </div>
+
+      {/* Global Music Controls */}
+      <MusicControls audioManager={audioManager} sessionData={sessionData} />
     </div>
   )
 }

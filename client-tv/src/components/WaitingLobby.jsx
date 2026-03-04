@@ -23,6 +23,12 @@ function WaitingLobby({ socket, sessionData, userRole, audioManager }) {
     await handleUnlockAudio();
     socket.emit('start-quiz');
   };
+
+  const handleRemoveParticipant = (participantId) => {
+    if (window.confirm('Are you sure you want to remove this student?')) {
+      socket.emit('remove-participant', { participantId });
+    }
+  };
   
   useEffect(() => {
     if (!socket) return
@@ -32,7 +38,10 @@ function WaitingLobby({ socket, sessionData, userRole, audioManager }) {
     })
     
     socket.on('participant-joined', (data) => {
-      setParticipants(prev => [...prev, data.participant])
+      setParticipants(prev => {
+        if (prev.find(p => p.id === data.participant.id)) return prev;
+        return [...prev, data.participant];
+      })
     })
     
     socket.on('participant-left', (data) => {
@@ -78,6 +87,15 @@ function WaitingLobby({ socket, sessionData, userRole, audioManager }) {
                   {p.name.charAt(0).toUpperCase()}
                 </div>
                 <div className="participant-name-tv">{p.name}</div>
+                {userRole === 'host' && (
+                  <button 
+                    className="remove-participant-btn" 
+                    onClick={() => handleRemoveParticipant(p.id)}
+                    title="Remove Student"
+                  >
+                    ×
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -99,8 +117,8 @@ function WaitingLobby({ socket, sessionData, userRole, audioManager }) {
                 onClick={handleUnlockAudio}
                 style={{
                   background: 'var(--color-primary)',
-                  fontSize: '20px',
-                  padding: '16px 24px'
+                  fontSize: '16px',
+                  padding: '12px 20px'
                 }}
               >
                 🔊 ENABLE SOUND
@@ -110,8 +128,8 @@ function WaitingLobby({ socket, sessionData, userRole, audioManager }) {
               className="start-quiz-button"
               onClick={handleStartQuiz}
               style={{
-                fontSize: '24px',
-                padding: '16px 32px',
+                fontSize: '18px',
+                padding: '12px 24px',
                 background: 'var(--color-success)',
                 color: 'white',
                 border: 'none',
@@ -132,9 +150,9 @@ function WaitingLobby({ socket, sessionData, userRole, audioManager }) {
                onClick={handleUnlockAudio}
                style={{
                  background: 'var(--color-primary)',
-                 fontSize: '18px',
-                 padding: '12px 24px',
-                 marginBottom: '20px'
+                 fontSize: '14px',
+                 padding: '10px 20px',
+                 marginBottom: '10px'
                }}
              >
                🔊 Enable Sound

@@ -1,50 +1,47 @@
 .waiting-lobby-tv {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
-  padding: var(--spacing-xl);
+  height: 100vh;
+  padding: var(--spacing-md);
+  overflow: hidden;
 }
 
 .lobby-header-tv {
   text-align: center;
-  margin-bottom: var(--spacing-xl);
+  margin-bottom: var(--spacing-md);
 }
 
 .session-code-display {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: var(--spacing-md);
-  margin-top: var(--spacing-lg);
-  padding: var(--spacing-lg) var(--spacing-xl);
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-lg);
   background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.2));
-  border: 3px solid var(--color-primary);
-  border-radius: var(--radius-lg);
+  border: 2px solid var(--color-primary);
+  border-radius: var(--radius-md);
   display: inline-flex;
-  margin-left: auto;
-  margin-right: auto;
 }
 
 .code-label {
-  font-size: 24px;
-  color: var(--color-text-secondary);
+  font-size: 18px;
+  color: var(--color-text-dim);
 }
 
 .code-value {
-  font-size: 48px;
-  font-weight: 700;
-  font-size: 64px;
+  font-size: 32px;
   font-weight: 800;
   color: white;
   font-family: 'JetBrains Mono', monospace;
-  text-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+  text-shadow: 0 0 15px rgba(99, 102, 241, 0.4);
 }
 
 .lobby-main-tv {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xl);
+  gap: var(--spacing-md);
   overflow: hidden;
 }
 
@@ -58,8 +55,8 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 200px;
-  height: 200px;
+  width: 120px;
+  height: 120px;
   border-radius: 50%;
   background: var(--color-surface);
   border: 2px solid var(--color-primary);
@@ -67,13 +64,13 @@
 }
 
 .count-number-tv {
-  font-size: 80px;
+  font-size: 48px;
   font-weight: 800;
   line-height: 1;
 }
 
 .count-label-tv {
-  font-size: 20px;
+  font-size: 14px;
   color: var(--color-text-dim);
   text-transform: uppercase;
   font-weight: 600;
@@ -81,17 +78,17 @@
 
 .participants-grid-tv {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: var(--spacing-md);
-  padding: var(--spacing-md);
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
   overflow-y: auto;
 }
 
 .participant-card-tv {
   display: flex;
   align-items: center;
-  gap: var(--spacing-md);
-  padding: var(--spacing-md);
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -105,21 +102,21 @@
 }
 
 .participant-avatar {
-  width: 64px;
-  height: 64px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   background: var(--grad-primary);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 32px;
+  font-size: 20px;
   font-weight: 800;
   color: white;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
 }
 
 .participant-name-tv {
-  font-size: 24px;
+  font-size: 18px;
   font-weight: 600;
   color: white;
   white-space: nowrap;
@@ -131,7 +128,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--spacing-lg) var(--spacing-xl);
+  padding: var(--spacing-sm) var(--spacing-md);
   background: var(--color-surface);
   backdrop-filter: var(--glass-blur);
   border: 1px solid var(--color-border);
@@ -144,8 +141,8 @@
 }
 
 .dot {
-  width: 16px;
-  height: 16px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   background: var(--color-primary);
   animation: bounce 1.4s infinite ease-in-out both;
@@ -165,6 +162,46 @@
 }
 
 .lobby-footer-tv p {
-  font-size: 24px;
-  color: var(--color-text-secondary);
+  font-size: 18px;
+  color: var(--color-text-dim);
+}
+
+.participant-card-tv {
+  position: relative;
+}
+
+.remove-participant-btn {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 24px;
+  height: 24px;
+  background: var(--color-error);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: bold;
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.2s ease;
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.participant-card-tv:hover .remove-participant-btn {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+.remove-participant-btn:hover {
+  background: #ff4d4d;
+  transform: scale(1.2) !important;
+}
+
+.remove-participant-btn:active {
+  transform: scale(1);
 }

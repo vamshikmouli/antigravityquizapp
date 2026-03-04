@@ -13,48 +13,125 @@
 .quiz-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 12px;
-  padding: 8px 0;
+  padding: 4px 0;
 }
 
-.question-number {
-  font-size: 16px;
-  font-weight: 800;
-  color: var(--color-primary);
-  text-transform: uppercase;
-  letter-spacing: 2px;
-  background: rgba(99, 102, 241, 0.1);
-  padding: 6px 14px;
-  border-radius: 12px;
-  border: 1px solid rgba(99, 102, 241, 0.2);
-}
-
-.round-badge {
-  display: none; /* Combine info or keep it simple */
-}
-
-.score-info {
+.header-left {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
+  gap: 8px;
 }
 
-.score-value {
-  font-size: 24px;
+.header-top-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.question-badge {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  overflow: hidden;
+  height: 24px;
+}
+
+.q-label {
+  background: var(--grad-primary);
+  color: white;
+  padding: 0 6px;
+  font-weight: 900;
+  font-size: 10px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.q-numbers {
+  padding: 0 6px;
+  color: white;
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.round-info-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--color-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.header-bottom-row {
+  display: flex;
+}
+
+.header-right {
+  display: flex;
+  align-items: flex-start;
+}
+
+.stat-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 4px 10px;
+  border-radius: 8px;
+  height: 30px;
+}
+
+.stat-icon {
+  font-size: 14px;
+}
+
+.stat-details {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.stat-label {
+  font-size: 7px;
+  font-weight: 900;
+  color: var(--color-text-dim);
+  line-height: 1;
+  margin-bottom: 1px;
+}
+
+.stat-value {
+  font-size: 14px;
   font-weight: 900;
   color: white;
-  text-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+  line-height: 1;
 }
 
-.rank {
-  font-size: 14px;
-  font-weight: 700;
+.score-badge {
+  border-left: 2px solid #ffcc33;
+  background: linear-gradient(90deg, rgba(255, 204, 51, 0.1), transparent);
+}
+
+.rank-badge {
+  border-right: 2px solid var(--color-success);
+  background: linear-gradient(-90deg, rgba(16, 185, 129, 0.1), transparent);
+}
+
+.score-badge .stat-value { color: #ffcc33; }
+.rank-badge .stat-value { color: var(--color-success); }
+
+.score-badge .stat-value {
+  color: #ffcc33;
+}
+
+.rank-badge .stat-value {
   color: var(--color-success);
-  background: rgba(16, 185, 129, 0.1);
-  padding: 2px 10px;
-  border-radius: 8px;
 }
 
 /* Circular Timer Mobile */
@@ -423,3 +500,52 @@
   color: var(--color-warning);
 }
 
+
+/* Time's Up Overlay */
+.times-up-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  border-radius: 28px;
+}
+
+.times-up-content {
+  text-align: center;
+  background: rgba(244, 63, 94, 0.1);
+  border: 2px solid var(--color-error);
+  padding: 40px 24px;
+  border-radius: 24px;
+  width: 100%;
+  animation: shake 0.5s ease-in-out;
+}
+
+.alarm-icon {
+  font-size: 64px;
+  margin-bottom: 20px;
+}
+
+.times-up-content h2 {
+  font-size: 32px;
+  font-weight: 900;
+  color: var(--color-error);
+  margin-bottom: 12px;
+  letter-spacing: 2px;
+}
+
+.times-up-content p {
+  font-size: 16px;
+  color: white;
+  opacity: 0.8;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-10px); }
+  75% { transform: translateX(10px); }
+}
