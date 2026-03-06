@@ -187,6 +187,7 @@
   font-weight: 700;
   line-height: 1.2;
   text-align: center;
+  color: var(--color-text);
 }
 
 /* Answer Grid */
@@ -249,6 +250,7 @@
   flex: 1;
   font-size: 18px;
   font-weight: 600;
+  color: var(--color-text);
 }
 
 .correct-indicator {
@@ -264,10 +266,10 @@
 .results-summary-inline {
   display: flex;
   gap: 12px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--color-surface);
   padding: 4px 12px;
   border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--color-border);
 }
 
 .res-stat {
@@ -449,14 +451,14 @@
 /* Host Stats Overlay */
 .host-names-list {
   margin-top: 20px;
-  background: rgba(0,0,0,0.85); /* Darker bg for readability */
+  background: var(--color-bg-secondary);
   padding: 25px 35px;
   border-radius: 16px;
   font-size: 1.5rem; /* Much larger font */
   max-width: 800px; /* Allow it to be wider */
   text-align: left;
-  border: 1px solid rgba(255,255,255,0.1);
-  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-soft);
 }
 
 .correct-names {

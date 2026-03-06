@@ -5,6 +5,8 @@ import LobbyScreen from './components/LobbyScreen'
 import QuizScreen from './components/QuizScreen'
 import ResultsScreen from './components/ResultsScreen'
 import { useWebSocket } from './hooks/useWebSocket'
+import { ThemeProvider } from './context/ThemeContext'
+import ThemeToggle from './components/ThemeToggle'
 
 function App() {
   const [sessionCode, setSessionCode] = useState(null)
@@ -115,7 +117,7 @@ function App() {
   return (
     <BrowserRouter>
       <div className="container">
-        {/* Connection Status */}
+        {/* Status Bar */}
         <div style={{ 
           position: 'fixed', 
           top: '10px', 
@@ -123,14 +125,20 @@ function App() {
           zIndex: 1000,
           display: 'flex',
           alignItems: 'center',
-          gap: '8px',
-          padding: '8px 12px',
-          background: 'rgba(0,0,0,0.5)',
-          borderRadius: '20px',
-          fontSize: '12px'
+          gap: '12px',
+          padding: '6px 12px',
+          background: 'rgba(0,0,0,0.4)',
+          backdropFilter: 'blur(8px)',
+          borderRadius: '24px',
+          fontSize: '12px',
+          color: '#fff',
+          border: '1px solid rgba(255,255,255,0.1)'
         }}>
-          <span className={`status-dot ${connected ? 'connected' : 'disconnected'}`}></span>
-          {connected ? 'Connected' : 'Disconnected'}
+          <ThemeToggle style={{ width: '24px', height: '24px', fontSize: '0.8rem', background: 'none', border: 'none', padding: 0 }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', borderLeft: '1px solid rgba(255,255,255,0.2)', paddingLeft: '10px' }}>
+            <span className={`status-dot ${connected ? 'connected' : 'disconnected'}`}></span>
+            {connected ? 'Connected' : 'Disconnected'}
+          </div>
         </div>
         
         {error && (
@@ -203,4 +211,10 @@ function App() {
   )
 }
 
-export default App
+const WrappedApp = () => (
+  <ThemeProvider>
+    <App />
+  </ThemeProvider>
+)
+
+export default WrappedApp

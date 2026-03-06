@@ -74,10 +74,10 @@
 }
 
 input {
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--color-surface);
   border: 2px solid var(--color-border);
   border-radius: var(--radius-md);
-  color: white;
+  color: var(--color-text);
   padding: var(--spacing-md);
   font-size: 18px;
   transition: all var(--transition-normal);
@@ -86,7 +86,7 @@ input {
 input:focus {
   outline: none;
   border-color: var(--color-primary);
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--color-surface-hover);
   box-shadow: var(--shadow-glow);
 }
 

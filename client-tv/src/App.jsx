@@ -14,6 +14,8 @@ import CreateSessionPage from './components/CreateSessionPage'
 import MusicSettings from './components/MusicSettings'
 import MusicControls from './components/MusicControls'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import { ThemeProvider } from './context/ThemeContext'
+import ThemeToggle from './components/ThemeToggle'
 import { useWebSocket } from './hooks/useWebSocket'
 import AudioManager from './utils/AudioManager'
 
@@ -233,7 +235,7 @@ function AppContent() {
 
   return (
     <div className="tv-container">
-       {/* Connection Status */}
+       {/* Connection & Theme Status */}
        <div style={{
           position: 'fixed',
           top: '20px',
@@ -241,15 +243,21 @@ function AppContent() {
           zIndex: 1000,
           display: 'flex',
           alignItems: 'center',
-          gap: '12px',
-          padding: '12px 24px',
-          background: 'rgba(0,0,0,0.7)',
-          borderRadius: '30px',
+          gap: '16px',
+          padding: '10px 24px',
+          background: 'rgba(0,0,0,0.6)',
+          backdropFilter: 'blur(12px)',
+          borderRadius: '40px',
           fontSize: '16px',
-          fontWeight: 600
+          fontWeight: 600,
+          color: '#fff',
+          border: '1px solid rgba(255,255,255,0.1)'
         }}>
-          <span className={`status-dot ${connected ? 'connected' : 'disconnected'}`}></span>
-          {connected ? 'Connected' : 'Disconnected'}
+          <ThemeToggle style={{ width: '40px', height: '40px', fontSize: '1.2rem', background: 'none', border: 'none', padding: 0 }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', borderLeft: '1px solid rgba(255,255,255,0.2)', paddingLeft: '16px' }}>
+            <span className={`status-dot ${connected ? 'connected' : 'disconnected'}`}></span>
+            {connected ? 'Connected' : 'Disconnected'}
+          </div>
         </div>
         
         {error && (
@@ -293,9 +301,11 @@ function AppContent() {
 function App() {
   return (
     <BrowserRouter basename="/display">
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   )
 }
