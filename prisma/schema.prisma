@@ -60,14 +60,24 @@ model Quiz {
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
-  password  String
+  password  String?  // Optional: SSO / social-login users have no local password
   name      String?
   createdAt DateTime @default(now())
-  
+
+  // Multi-tenant / SSO fields (Phase 1)
+  tenantId     String? // Which host app / tenant this user belongs to (e.g. a Classo tenant)
+  schoolId     String? // School within the tenant
+  authProvider String  @default("EMAIL") // EMAIL | SSO_JDV | SSO_CLASSO | (future: GOOGLE, PHONE)
+  externalId   String? // The user's id in the source system (JWT `sub`)
+  phone        String?
+
   quizzes     Quiz[]
   questions   Question[]
   sessions    Session[]
   musicTracks MusicTrack[]
+
+  // One SSO identity per (tenant, external user) — used for SSO upserts
+  @@unique([tenantId, externalId])
 }
 
 model Session {

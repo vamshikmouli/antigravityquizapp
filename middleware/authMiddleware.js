@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-123';
+// No insecure fallback: server.js refuses to boot when JWT_SECRET is unset.
+const JWT_SECRET = process.env.JWT_SECRET;
 
 export function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];

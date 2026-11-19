@@ -36,7 +36,8 @@ const LobbyConnect = ({ socket, onJoinSuccess }) => {
     if (state?.code && state?.isHost && socket) {
       socket.emit('join-session', {
         code: state.code,
-        role: 'host'
+        role: 'host',
+        token: localStorage.getItem('token')
       });
       
       const handleJoined = (data) => {
@@ -127,7 +128,8 @@ function AppContent() {
         
         socket.emit('join-session', {
           code,
-          role
+          role,
+          token: localStorage.getItem('token')
         })
         
         const handleRejoin = (data) => {
