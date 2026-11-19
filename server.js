@@ -429,10 +429,13 @@ app.delete('/api/questions/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/questions/import', authenticateToken, async (req, res) => {
+// Bulk JSON import (array of question objects in the body). Uses a distinct path
+// from the multipart file-upload import above, which otherwise shadows it since
+// Express matches the first route registered for POST /api/questions/import.
+app.post('/api/questions/import-json', authenticateToken, async (req, res) => {
   try {
     const { questions } = req.body;
-    
+
     if (!Array.isArray(questions)) {
       return res.status(400).json({ error: 'Questions must be an array' });
     }
