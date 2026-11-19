@@ -21,6 +21,7 @@ import * as quizController from './controllers/quizController.js';
 import * as importController from './controllers/importController.js';
 import * as musicController from './controllers/musicController.js';
 import { authenticateToken } from './middleware/authMiddleware.js';
+import { ownerScope, hostScope, tenantStamp } from './controllers/scope.js';
 import { getBuzzerManager, removeBuzzerManager } from './controllers/buzzerController.js';
 import multer from 'multer';
 import fs from 'fs';
@@ -216,7 +217,7 @@ app.post('/api/questions/import', authenticateToken, excelUpload.single('file'),
     const { quizId } = req.body;
     const sanitizedQuizId = (quizId === 'null' || quizId === 'undefined') ? null : quizId;
     
-    const result = await importController.importQuestions(req.file.path, req.user.id, sanitizedQuizId);
+    const result = await importController.importQuestions(req.file.path, req.user.id, sanitizedQuizId, tenantStamp(req.user));
     
     // Clean up uploaded file
     fs.unlinkSync(req.file.path);
@@ -261,7 +262,7 @@ app.post('/api/sessions', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Invalid request data' });
     }
     
-    const session = await sessionController.createSession(hostId, questionIds, settings);
+    const session = await sessionController.createSession(hostId, questionIds, settings, tenantStamp(req.user));
     res.json(session);
   } catch (error) {
     console.error('Error creating session:', error);
@@ -305,18 +306,14 @@ app.get('/api/sessions/:code', async (req, res) => {
 
 app.delete('/api/sessions/:id', authenticateToken, async (req, res) => {
   try {
-    // Only the session's host may delete it.
-    const session = await prisma.session.findUnique({
-      where: { id: req.params.id },
-      select: { id: true, hostId: true }
+    // Only the session's host (within their tenant) may delete it.
+    const session = await prisma.session.findFirst({
+      where: { id: req.params.id, ...hostScope(req.user) },
+      select: { id: true }
     });
 
     if (!session) {
       return res.status(404).json({ error: 'Session not found' });
-    }
-
-    if (session.hostId !== req.user.id) {
-      return res.status(403).json({ error: 'You do not own this session' });
     }
 
     await sessionController.deleteSession(req.params.id);
@@ -335,9 +332,9 @@ app.post('/api/sessions/quiz/:quizId', authenticateToken, async (req, res) => {
     const { quizId } = req.params;
     const hostId = req.user.id;
     
-    // Get questions from quiz
+    // Get questions from quiz (scoped to the caller + tenant)
     const quiz = await prisma.quiz.findFirst({
-      where: { id: quizId, ownerId: hostId },
+      where: { id: quizId, ...ownerScope(req.user) },
       include: { questions: { orderBy: { createdAt: 'asc' } } }
     });
     
@@ -350,7 +347,7 @@ app.post('/api/sessions/quiz/:quizId', authenticateToken, async (req, res) => {
     }
     
     const questionIds = quiz.questions.map(q => q.id);
-    const session = await sessionController.createSession(hostId, questionIds, { ...settings, quizId });
+    const session = await sessionController.createSession(hostId, questionIds, { ...settings, quizId }, tenantStamp(req.user));
     res.json(session);
   } catch (error) {
     console.error('Error creating session from quiz:', error);
@@ -366,9 +363,13 @@ app.get('/api/questions', authenticateToken, async (req, res) => {
       type: req.query.type,
       category: req.query.category,
       round: req.query.round ? parseInt(req.query.round) : undefined,
-      ownerId: req.user.id 
+      ownerId: req.user.id
     };
-    
+    // Tenant scoping (defense-in-depth): only when the token carries a tenant claim.
+    if (req.user.tenantId !== undefined) {
+      filters.tenantId = req.user.tenantId;
+    }
+
     const questions = await questionController.getAllQuestions(filters);
     res.json(questions);
   } catch (error) {
@@ -379,7 +380,7 @@ app.get('/api/questions', authenticateToken, async (req, res) => {
 
 app.post('/api/questions', authenticateToken, async (req, res) => {
   try {
-    const questionData = { ...req.body, ownerId: req.user.id };
+    const questionData = { ...req.body, ownerId: req.user.id, ...tenantStamp(req.user) };
     const question = await questionController.createQuestion(questionData);
     res.json(question);
   } catch (error) {
@@ -390,8 +391,18 @@ app.post('/api/questions', authenticateToken, async (req, res) => {
 
 app.put('/api/questions/:id', authenticateToken, async (req, res) => {
   try {
-    // Ideally check ownership here too
-    const question = await questionController.updateQuestion(req.params.id, req.body);
+    // Ownership check: the caller must own this question (within their tenant).
+    const existing = await prisma.question.findFirst({
+      where: { id: req.params.id, ...ownerScope(req.user) },
+      select: { id: true }
+    });
+    if (!existing) {
+      return res.status(404).json({ error: 'Question not found or unauthorized' });
+    }
+
+    // Never let the client move a question to another owner/tenant via the body.
+    const { ownerId, tenantId, schoolId, ...safeBody } = req.body || {};
+    const question = await questionController.updateQuestion(req.params.id, safeBody);
     res.json(question);
   } catch (error) {
     console.error('Error updating question:', error);
@@ -401,6 +412,15 @@ app.put('/api/questions/:id', authenticateToken, async (req, res) => {
 
 app.delete('/api/questions/:id', authenticateToken, async (req, res) => {
   try {
+    // Ownership check: the caller must own this question (within their tenant).
+    const existing = await prisma.question.findFirst({
+      where: { id: req.params.id, ...ownerScope(req.user) },
+      select: { id: true }
+    });
+    if (!existing) {
+      return res.status(404).json({ error: 'Question not found or unauthorized' });
+    }
+
     await questionController.deleteQuestion(req.params.id);
     res.json({ success: true });
   } catch (error) {
@@ -416,8 +436,14 @@ app.post('/api/questions/import', authenticateToken, async (req, res) => {
     if (!Array.isArray(questions)) {
       return res.status(400).json({ error: 'Questions must be an array' });
     }
-    
-    const result = await questionController.importQuestions(questions);
+
+    // Stamp ownership + tenant so imported questions belong to the caller.
+    const stamped = questions.map(q => ({
+      ...q,
+      ownerId: req.user.id,
+      ...tenantStamp(req.user)
+    }));
+    const result = await questionController.importQuestions(stamped);
     res.json(result);
   } catch (error) {
     console.error('Error importing questions:', error);
@@ -425,10 +451,10 @@ app.post('/api/questions/import', authenticateToken, async (req, res) => {
   }
 });
 
-// Create sample questions (for testing)
-app.post('/api/questions/sample', async (req, res) => {
+// Create sample questions (for testing) — authenticated; samples belong to the caller.
+app.post('/api/questions/sample', authenticateToken, async (req, res) => {
   try {
-    const result = await questionController.createSampleQuestions();
+    const result = await questionController.createSampleQuestions({ ownerId: req.user.id, ...tenantStamp(req.user) });
     res.json(result);
   } catch (error) {
     console.error('Error creating sample questions:', error);
@@ -438,17 +464,14 @@ app.post('/api/questions/sample', async (req, res) => {
 
 // Analytics routes
 // Helper: confirm the authenticated user owns the given session (by session id).
-async function assertSessionOwner(sessionId, userId, res) {
-  const session = await prisma.session.findUnique({
-    where: { id: sessionId },
-    select: { id: true, hostId: true }
+async function assertSessionOwner(sessionId, user, res) {
+  const session = await prisma.session.findFirst({
+    where: { id: sessionId, ...hostScope(user) },
+    select: { id: true }
   });
   if (!session) {
+    // Collapse not-found and not-owner into 404 so we don't reveal existence.
     res.status(404).json({ error: 'Session not found' });
-    return false;
-  }
-  if (session.hostId !== userId) {
-    res.status(403).json({ error: 'You do not own this session' });
     return false;
   }
   return true;
@@ -456,7 +479,7 @@ async function assertSessionOwner(sessionId, userId, res) {
 
 app.get('/api/analytics/:sessionId', authenticateToken, async (req, res) => {
   try {
-    if (!(await assertSessionOwner(req.params.sessionId, req.user.id, res))) return;
+    if (!(await assertSessionOwner(req.params.sessionId, req.user, res))) return;
 
     const analytics = await analyticsController.getAnalytics(req.params.sessionId);
 
@@ -473,7 +496,7 @@ app.get('/api/analytics/:sessionId', authenticateToken, async (req, res) => {
 
 app.get('/api/analytics/:sessionId/export', authenticateToken, async (req, res) => {
   try {
-    if (!(await assertSessionOwner(req.params.sessionId, req.user.id, res))) return;
+    if (!(await assertSessionOwner(req.params.sessionId, req.user, res))) return;
 
     const analyticsJson = await analyticsController.exportAnalytics(req.params.sessionId);
 

@@ -8,7 +8,7 @@ const prisma = new PrismaClient();
 /**
  * Import questions from Excel or CSV
  */
-export async function importQuestions(filePath, ownerId, quizId) {
+export async function importQuestions(filePath, ownerId, quizId, tenant = {}) {
   try {
     const workbook = readFile(filePath);
     const sheetName = workbook.SheetNames[0];
@@ -61,7 +61,9 @@ export async function importQuestions(filePath, ownerId, quizId) {
           round: parseInt(row['Round']) || 1,
           category: row['Category'] ? row['Category'].toString() : 'General',
           ownerId,
-          quizId
+          quizId,
+          tenantId: tenant.tenantId ?? null,
+          schoolId: tenant.schoolId ?? null
         };
 
         console.log(`[Import] Prepared question: ${questionData.text.substring(0, 30)}...`);

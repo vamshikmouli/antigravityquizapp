@@ -47,6 +47,12 @@ export async function getAllQuestions(filters = {}) {
       where.ownerId = filters.ownerId;
     }
 
+    // Tenant scoping (defense-in-depth). Present-but-null means "null-tenant rows"
+    // (EMAIL users); absent means the caller's token carried no tenant claim.
+    if (Object.prototype.hasOwnProperty.call(filters, 'tenantId')) {
+      where.tenantId = filters.tenantId;
+    }
+
     if (filters.quizId) {
       where.quizId = filters.quizId;
     }
@@ -161,7 +167,7 @@ export async function getQuestionsByIds(ids) {
 /**
  * Create sample questions for testing
  */
-export async function createSampleQuestions() {
+export async function createSampleQuestions(owner = {}) {
   const sampleQuestions = [
     {
       text: 'What is the capital of France?',
@@ -230,12 +236,20 @@ export async function createSampleQuestions() {
     }
   ];
   
+  // Stamp ownership + tenant so the samples belong to the requesting user.
+  const stamped = sampleQuestions.map(q => ({
+    ...q,
+    ownerId: owner.ownerId ?? null,
+    tenantId: owner.tenantId ?? null,
+    schoolId: owner.schoolId ?? null
+  }));
+
   try {
     const questions = await prisma.question.createMany({
-      data: sampleQuestions,
+      data: stamped,
       skipDuplicates: true
     });
-    
+
     return questions;
   } catch (error) {
     console.error('Error creating sample questions:', error);
