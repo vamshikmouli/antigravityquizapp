@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { verifySsoToken, SsoError } from './ssoAuth.js';
+import { sessionClaims } from './scope.js';
 
 const prisma = new PrismaClient();
 // JWT_SECRET must be set in the environment. server.js refuses to boot if it is unset,
@@ -34,7 +35,7 @@ export async function register(req, res) {
       }
     });
 
-    const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign(sessionClaims(user), JWT_SECRET, { expiresIn: '7d' });
 
     res.json({
       token,
@@ -71,7 +72,7 @@ export async function login(req, res) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign(sessionClaims(user), JWT_SECRET, { expiresIn: '7d' });
 
     res.json({
       token,
@@ -135,7 +136,7 @@ export async function ssoLogin(req, res) {
     });
 
     // Issue a quiz-app session token identical in shape to login/register.
-    const sessionToken = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '7d' });
+    const sessionToken = jwt.sign(sessionClaims(user), JWT_SECRET, { expiresIn: '7d' });
 
     return res.json({
       token: sessionToken,

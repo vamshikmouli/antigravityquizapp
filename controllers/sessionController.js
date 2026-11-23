@@ -7,7 +7,7 @@ const prisma = new PrismaClient();
 /**
  * Create a new quiz session
  */
-export async function createSession(hostId, questionIds, settings = {}) {
+export async function createSession(hostId, questionIds, settings = {}, tenant = {}) {
   try {
     // Generate unique session code
     let code;
@@ -24,6 +24,8 @@ export async function createSession(hostId, questionIds, settings = {}) {
       data: {
         code,
         hostId,
+        tenantId: tenant.tenantId ?? null,
+        schoolId: tenant.schoolId ?? null,
         quizId: settings.quizId,
         musicEnabled: settings.musicEnabled ?? true,
         musicVolume: settings.musicVolume ?? 0.5,

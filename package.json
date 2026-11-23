@@ -11,7 +11,7 @@
     "build:tv": "cd client-tv && npm install --include=dev && npm run build",
     "build:mobile": "cd client-mobile && npm install --include=dev && npm run build",
     "build:all": "npm run build:tv && npm run build:mobile",
-    "test": "node --test test/",
+    "test": "node --test \"test/**/*.test.js\"",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
@@ -39,6 +39,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "prisma": "^5.22.0"
+    "prisma": "^5.22.0",
+    "socket.io-client": "^4.8.1"
   }
 }

@@ -17,6 +17,11 @@ model Question {
   quizId         String?
   quiz           Quiz?    @relation(fields: [quizId], references: [id], onDelete: Cascade)
 
+  // Multi-tenant scoping (Phase 2): denormalized from the owner at creation time
+  // so queries can filter by tenant as defense-in-depth alongside ownerId.
+  tenantId       String?
+  schoolId       String?
+
   options        String[] // Array of answer options
   correctAnswer  String
   points         Int      @default(100)
@@ -51,6 +56,9 @@ model Quiz {
   description String?
   ownerId     String
   owner       User       @relation(fields: [ownerId], references: [id])
+  // Multi-tenant scoping (Phase 2): denormalized from the owner at creation time.
+  tenantId    String?
+  schoolId    String?
   questions   Question[]
   sessions    Session[]
   createdAt   DateTime   @default(now())
@@ -85,6 +93,9 @@ model Session {
   code                 String   @unique // e.g., "ABC-123"
   hostId               String
   host                 User     @relation(fields: [hostId], references: [id])
+  // Multi-tenant scoping (Phase 2): denormalized from the host at creation time.
+  tenantId             String?
+  schoolId             String?
 
   quizId               String?
   quiz                 Quiz?    @relation(fields: [quizId], references: [id])

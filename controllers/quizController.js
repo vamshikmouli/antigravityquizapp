@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { ownerScope, tenantStamp } from './scope.js';
 const prisma = new PrismaClient();
 
 /**
@@ -7,7 +8,7 @@ const prisma = new PrismaClient();
 export async function getAllQuizzes(req, res) {
   try {
     const quizzes = await prisma.quiz.findMany({
-      where: { ownerId: req.user.id },
+      where: ownerScope(req.user),
       include: {
         _count: {
           select: { questions: true }
@@ -29,10 +30,7 @@ export async function getQuiz(req, res) {
   try {
     const { id } = req.params;
     const quiz = await prisma.quiz.findFirst({
-      where: { 
-        id,
-        ownerId: req.user.id 
-      },
+      where: { id, ...ownerScope(req.user) },
       include: {
         questions: {
           orderBy: { createdAt: 'asc' }
@@ -66,7 +64,8 @@ export async function createQuiz(req, res) {
       data: {
         title,
         description,
-        ownerId: req.user.id
+        ownerId: req.user.id,
+        ...tenantStamp(req.user)
       }
     });
 
@@ -86,7 +85,7 @@ export async function updateQuiz(req, res) {
     const { title, description } = req.body;
 
     const existingQuiz = await prisma.quiz.findFirst({
-      where: { id, ownerId: req.user.id }
+      where: { id, ...ownerScope(req.user) }
     });
 
     if (!existingQuiz) {
@@ -113,7 +112,7 @@ export async function deleteQuiz(req, res) {
     const { id } = req.params;
 
     const existingQuiz = await prisma.quiz.findFirst({
-      where: { id, ownerId: req.user.id }
+      where: { id, ...ownerScope(req.user) }
     });
 
     if (!existingQuiz) {
@@ -145,16 +144,26 @@ export async function importQuestionsFromQuiz(req, res) {
 
     // 1. Verify target quiz ownership
     const targetQuiz = await prisma.quiz.findFirst({
-      where: { id: targetQuizId, ownerId: req.user.id }
+      where: { id: targetQuizId, ...ownerScope(req.user) }
     });
 
     if (!targetQuiz) {
       return res.status(404).json({ error: 'Target quiz not found or unauthorized' });
     }
 
-    // 2. Fetch source questions
+    // 1b. Verify SOURCE quiz ownership too — a caller must not be able to copy
+    // another owner's (or tenant's) questions by guessing a quiz id.
+    const sourceQuiz = await prisma.quiz.findFirst({
+      where: { id: sourceQuizId, ...ownerScope(req.user) }
+    });
+
+    if (!sourceQuiz) {
+      return res.status(404).json({ error: 'Source quiz not found or unauthorized' });
+    }
+
+    // 2. Fetch source questions (scoped to the caller as defense-in-depth)
     const sourceQuestions = await prisma.question.findMany({
-      where: { quizId: sourceQuizId }
+      where: { quizId: sourceQuizId, ...ownerScope(req.user) }
     });
 
     if (sourceQuestions.length === 0) {
@@ -167,7 +176,8 @@ export async function importQuestionsFromQuiz(req, res) {
       return {
         ...rest,
         quizId: targetQuizId,
-        ownerId: req.user.id // Ensure ownership
+        ownerId: req.user.id, // Ensure ownership
+        ...tenantStamp(req.user)
       };
     });
 
