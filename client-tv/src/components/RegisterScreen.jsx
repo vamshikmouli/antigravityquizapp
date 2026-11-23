@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import GoogleSignInButton from './GoogleSignInButton';
 import './Auth.css';
 
 function RegisterScreen() {
@@ -70,6 +71,8 @@ function RegisterScreen() {
             {isLoading ? 'Creating Account...' : 'Register'}
           </button>
         </form>
+
+        <GoogleSignInButton onError={setError} />
 
         <div className="auth-footer">
           Already have an account? <Link to="/login">Login</Link>

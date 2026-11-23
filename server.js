@@ -134,7 +134,17 @@ const activeSessions = new Map();
 app.post('/api/auth/register', authController.register);
 app.post('/api/auth/login', authController.login);
 app.post('/api/auth/sso', authController.ssoLogin);
+app.post('/api/auth/google', authController.googleLogin);
 app.get('/api/auth/me', authenticateToken, authController.getMe);
+
+// Public auth config so the frontend knows which standalone login methods to show
+// (e.g. render the Google button only when GOOGLE_CLIENT_ID is configured).
+app.get('/api/auth/config', (req, res) => {
+  res.json({
+    googleEnabled: Boolean(process.env.GOOGLE_CLIENT_ID),
+    googleClientId: process.env.GOOGLE_CLIENT_ID || null
+  });
+});
 
 // Quiz Routes
 app.get('/api/quizzes', authenticateToken, quizController.getAllQuizzes);
