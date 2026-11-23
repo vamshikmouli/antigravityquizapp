@@ -16,8 +16,12 @@
  */
 
 const DEFAULT_TIMEOUT_MS = 30000;
+const RETRY_STATUSES = new Set([429, 500, 502, 503, 504]); // transient; worth retrying
+const MAX_ATTEMPTS = 3;
 
-async function postJson(url, { headers = {}, body, timeoutMs = DEFAULT_TIMEOUT_MS }) {
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function postOnce(url, { headers = {}, body, timeoutMs = DEFAULT_TIMEOUT_MS }) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -28,13 +32,25 @@ async function postJson(url, { headers = {}, body, timeoutMs = DEFAULT_TIMEOUT_M
       signal: controller.signal
     });
     const text = await res.text();
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}: ${text.slice(0, 300)}`);
-    }
-    return JSON.parse(text);
+    return { status: res.status, ok: res.ok, text };
   } finally {
     clearTimeout(timer);
   }
+}
+
+// POST JSON with a small retry/backoff on transient upstream errors (e.g. a
+// provider returning 503 "high demand"). Non-retryable errors (401/404/400)
+// fail fast.
+async function postJson(url, opts) {
+  let last;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const r = await postOnce(url, opts);
+    if (r.ok) return JSON.parse(r.text);
+    last = new Error(`HTTP ${r.status}: ${r.text.slice(0, 300)}`);
+    if (!RETRY_STATUSES.has(r.status) || attempt === MAX_ATTEMPTS) break;
+    await sleep(600 * attempt); // 600ms, 1200ms
+  }
+  throw last;
 }
 
 export const PROVIDERS = {
@@ -67,10 +83,12 @@ export const PROVIDERS = {
     label: 'Gemini',
     keyEnv: 'GEMINI_API_KEY',
     modelEnv: 'GEMINI_MODEL',
-    defaultModel: 'gemini-2.0-flash',
+    // 'gemini-flash-latest' is a rolling alias to the current Flash model, so it
+    // won't 404 when a dated model (e.g. gemini-2.0-flash) is retired.
+    defaultModel: 'gemini-flash-latest',
     configured: (env) => Boolean(env.GEMINI_API_KEY),
     async complete({ system, user, model, env }) {
-      const m = model || env.GEMINI_MODEL || 'gemini-2.0-flash';
+      const m = model || env.GEMINI_MODEL || 'gemini-flash-latest';
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${env.GEMINI_API_KEY}`;
       const data = await postJson(url, {
         body: {
