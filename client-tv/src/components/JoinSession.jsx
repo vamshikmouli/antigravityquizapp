@@ -38,7 +38,8 @@ function JoinSession({ socket, onJoinSuccess }) {
     
     socket.emit('join-session', {
       code: code,
-      role: isHost ? 'host' : 'display'
+      role: isHost ? 'host' : 'display',
+      token: localStorage.getItem('token')
     })
     
     socket.once('session-joined', (data) => {

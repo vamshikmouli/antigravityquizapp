@@ -1,9 +1,12 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import { verifySsoToken, SsoError } from './ssoAuth.js';
 
 const prisma = new PrismaClient();
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-123';
+// JWT_SECRET must be set in the environment. server.js refuses to boot if it is unset,
+// so there is deliberately no insecure fallback here.
+const JWT_SECRET = process.env.JWT_SECRET;
 
 /**
  * Register a new user
@@ -81,6 +84,125 @@ export async function login(req, res) {
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Login failed' });
+  }
+}
+
+/**
+ * SSO login from a trusted host app (JDV / Classo).
+ *
+ * Body: { token, source }  where source ∈ { 'jdv', 'classo' }
+ *
+ * The `token` is an HS256 JWT minted by the host app and signed with the
+ * secret shared with this quiz app (QUIZ_SSO_SECRET_JDV / QUIZ_SSO_SECRET_CLASSO).
+ * Expected claims:
+ *   { iss, tenantId, schoolId, sub, name, email?, role:'host', iat, exp }
+ * with a short lifetime (<= ~5 min).
+ *
+ * On success we UPSERT a quiz-app User keyed by (tenantId, externalId=sub) and
+ * return a quiz-app session JWT in the SAME shape authenticateToken consumes
+ * today (jwt.sign({ id: user.id }, JWT_SECRET)).
+ *
+ * Any invalid / expired / bad-source token → 401.
+ */
+export async function ssoLogin(req, res) {
+  try {
+    const { token, source } = req.body || {};
+
+    // Pure verification (signature, source, role, lifetime, required claims).
+    let verified;
+    try {
+      verified = verifySsoToken(token, source);
+    } catch (err) {
+      if (err instanceof SsoError) {
+        if (err.status === 500) console.error('SSO config error:', err.message);
+        return res.status(err.status).json({ error: err.message });
+      }
+      throw err;
+    }
+
+    const { claims, authProvider } = verified;
+    const tenantId = claims.tenantId;
+    const externalId = claims.sub;
+    const name = claims.name || null;
+    const email = claims.email || null;
+    const schoolId = claims.schoolId || null;
+    // Stable placeholder when the host app does not provide an email (email is
+    // unique & non-null in our schema).
+    const placeholderEmail = `${source}_${tenantId}_${externalId}@sso.local`;
+
+    const user = await upsertSsoUser({
+      tenantId, externalId, name, schoolId, authProvider, email, placeholderEmail
+    });
+
+    // Issue a quiz-app session token identical in shape to login/register.
+    const sessionToken = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '7d' });
+
+    return res.json({
+      token: sessionToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        tenantId: user.tenantId,
+        schoolId: user.schoolId,
+        authProvider: user.authProvider
+      }
+    });
+  } catch (error) {
+    console.error('SSO login error:', error);
+    return res.status(500).json({ error: 'SSO login failed' });
+  }
+}
+
+/**
+ * Upsert the quiz-app user for an SSO identity, keyed by (tenantId, externalId).
+ *
+ * Handles the edge case where the token's email already belongs to a *different*
+ * user row: rather than crashing on the unique-email constraint, we retry the
+ * write without touching the email, so SSO stays functional. (A later phase can
+ * surface a proper "email already in use" resolution flow.)
+ */
+async function upsertSsoUser({ tenantId, externalId, name, schoolId, authProvider, email, placeholderEmail }) {
+  const where = { tenantId_externalId: { tenantId, externalId } };
+
+  try {
+    return await prisma.user.upsert({
+      where,
+      update: {
+        name,
+        schoolId,
+        authProvider,
+        ...(email ? { email } : {})
+      },
+      create: {
+        tenantId,
+        externalId,
+        schoolId,
+        name,
+        authProvider,
+        email: email || placeholderEmail
+      }
+    });
+  } catch (err) {
+    // P2002 = unique constraint violation. Only retry when it's the email that
+    // clashed (another user already owns it); otherwise rethrow.
+    const isEmailConflict = err?.code === 'P2002' && (err?.meta?.target?.includes?.('email') ?? true);
+    if (!isEmailConflict) throw err;
+
+    console.warn(`SSO: email conflict for (${tenantId}, ${externalId}); writing user without email change`);
+    return prisma.user.upsert({
+      where,
+      update: { name, schoolId, authProvider },
+      create: {
+        tenantId,
+        externalId,
+        schoolId,
+        name,
+        authProvider,
+        // Create path: fall back to the collision-free placeholder.
+        email: placeholderEmail
+      }
+    });
   }
 }
 

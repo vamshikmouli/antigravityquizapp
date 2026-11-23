@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { PrismaClient } from '@prisma/client';
+import jwt from 'jsonwebtoken';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -30,6 +31,13 @@ import { calculateRankings, sanitizeStudentName } from './shared/utils.js';
 
 // Load environment variables
 dotenv.config();
+
+// Fail fast if the signing secret is missing — there is no insecure fallback.
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET is not set. Refusing to start. Set JWT_SECRET in the environment.');
+  process.exit(1);
+}
 
 const app = express();
 const httpServer = createServer(app);
@@ -124,6 +132,7 @@ const activeSessions = new Map();
 // Auth Routes
 app.post('/api/auth/register', authController.register);
 app.post('/api/auth/login', authController.login);
+app.post('/api/auth/sso', authController.ssoLogin);
 app.get('/api/auth/me', authenticateToken, authController.getMe);
 
 // Quiz Routes
@@ -260,23 +269,56 @@ app.post('/api/sessions', authenticateToken, async (req, res) => {
   }
 });
 
+// PUBLIC: anonymous players look up a session by code to join. This MUST NOT
+// leak correct answers, per-question answer data, or other hosts' PII. We return
+// a deliberately narrow public projection rather than the full session graph.
 app.get('/api/sessions/:code', async (req, res) => {
   try {
     const session = await sessionController.getSessionByCode(req.params.code);
-    
+
     if (!session) {
       return res.status(404).json({ error: 'Session not found' });
     }
-    
-    res.json(session);
+
+    const publicSession = {
+      id: session.id,
+      code: session.code,
+      status: session.status,
+      currentQuestionIndex: session.currentQuestionIndex,
+      allowLateJoin: session.allowLateJoin,
+      musicEnabled: session.musicEnabled,
+      musicVolume: session.musicVolume,
+      // Leaderboard-safe participant info only (no answers).
+      participants: (session.participants || []).map(p => ({
+        id: p.id,
+        name: p.name,
+        score: p.score
+      }))
+    };
+
+    res.json(publicSession);
   } catch (error) {
     console.error('Error getting session:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-app.delete('/api/sessions/:id', async (req, res) => {
+app.delete('/api/sessions/:id', authenticateToken, async (req, res) => {
   try {
+    // Only the session's host may delete it.
+    const session = await prisma.session.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, hostId: true }
+    });
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    if (session.hostId !== req.user.id) {
+      return res.status(403).json({ error: 'You do not own this session' });
+    }
+
     await sessionController.deleteSession(req.params.id);
     removeBuzzerManager(req.params.id);
     res.json({ success: true });
@@ -395,14 +437,33 @@ app.post('/api/questions/sample', async (req, res) => {
 });
 
 // Analytics routes
-app.get('/api/analytics/:sessionId', async (req, res) => {
+// Helper: confirm the authenticated user owns the given session (by session id).
+async function assertSessionOwner(sessionId, userId, res) {
+  const session = await prisma.session.findUnique({
+    where: { id: sessionId },
+    select: { id: true, hostId: true }
+  });
+  if (!session) {
+    res.status(404).json({ error: 'Session not found' });
+    return false;
+  }
+  if (session.hostId !== userId) {
+    res.status(403).json({ error: 'You do not own this session' });
+    return false;
+  }
+  return true;
+}
+
+app.get('/api/analytics/:sessionId', authenticateToken, async (req, res) => {
   try {
+    if (!(await assertSessionOwner(req.params.sessionId, req.user.id, res))) return;
+
     const analytics = await analyticsController.getAnalytics(req.params.sessionId);
-    
+
     if (!analytics) {
       return res.status(404).json({ error: 'Analytics not found' });
     }
-    
+
     res.json(analytics);
   } catch (error) {
     console.error('Error getting analytics:', error);
@@ -410,10 +471,12 @@ app.get('/api/analytics/:sessionId', async (req, res) => {
   }
 });
 
-app.get('/api/analytics/:sessionId/export', async (req, res) => {
+app.get('/api/analytics/:sessionId/export', authenticateToken, async (req, res) => {
   try {
+    if (!(await assertSessionOwner(req.params.sessionId, req.user.id, res))) return;
+
     const analyticsJson = await analyticsController.exportAnalytics(req.params.sessionId);
-    
+
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Content-Disposition', `attachment; filename=analytics-${req.params.sessionId}.json`);
     res.send(analyticsJson);
@@ -450,7 +513,33 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
         socket.emit(SOCKET_EVENTS.ERROR, { message: 'Session has already started' });
         return;
       }
-      
+
+      // SECURITY: host/display roles grant control over the session, so they must
+      // prove ownership with a valid quiz-app JWT. Students stay anonymous.
+      // We only honor the privileged role AFTER verification; otherwise reject.
+      if (role === 'host' || role === 'display') {
+        const token = data.token;
+        if (!token) {
+          socket.emit(SOCKET_EVENTS.ERROR, { message: 'Authentication required for host access' });
+          return;
+        }
+
+        let decoded;
+        try {
+          decoded = jwt.verify(token, JWT_SECRET);
+        } catch (err) {
+          socket.emit(SOCKET_EVENTS.ERROR, { message: 'Invalid or expired authentication token' });
+          return;
+        }
+
+        if (!decoded?.id || decoded.id !== session.hostId) {
+          socket.emit(SOCKET_EVENTS.ERROR, { message: 'You do not own this session' });
+          return;
+        }
+
+        socket.data.userId = decoded.id;
+      }
+
       // Join socket room
       socket.join(session.code);
       socket.data.sessionCode = session.code;
