@@ -20,6 +20,7 @@ import * as authController from './controllers/authController.js';
 import * as quizController from './controllers/quizController.js';
 import * as importController from './controllers/importController.js';
 import * as musicController from './controllers/musicController.js';
+import * as aiController from './controllers/aiController.js';
 import { authenticateToken } from './middleware/authMiddleware.js';
 import { ownerScope, hostScope, tenantStamp } from './controllers/scope.js';
 import { getBuzzerManager, removeBuzzerManager } from './controllers/buzzerController.js';
@@ -463,6 +464,11 @@ app.post('/api/questions/import-json', authenticateToken, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// AI question generation (Phase: AI). Returns DRAFT questions; the client saves
+// the chosen ones through the normal create/import flow.
+app.get('/api/ai/providers', authenticateToken, aiController.listProviders);
+app.post('/api/questions/generate', authenticateToken, aiController.generateQuestions);
 
 // Create sample questions (for testing) — authenticated; samples belong to the caller.
 app.post('/api/questions/sample', authenticateToken, async (req, res) => {

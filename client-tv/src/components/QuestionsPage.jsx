@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import QuestionForm from './QuestionForm';
+import AIGenerateModal from './AIGenerateModal';
 import Select from './common/Select';
 import { useParams, Link } from 'react-router-dom';
 import './QuestionManager.css';
@@ -24,6 +25,7 @@ function QuestionsPage() {
   const [selectedSourceQuiz, setSelectedSourceQuiz] = useState(null);
   const [loadingQuizzes, setLoadingQuizzes] = useState(false);
   const [showKebabMenu, setShowKebabMenu] = useState(false);
+  const [showAIModal, setShowAIModal] = useState(false);
   const kebabRef = useRef(null);
 
   const fetchQuizData = async () => {
@@ -195,9 +197,16 @@ function QuestionsPage() {
                 >
                   <span>➕</span> Add Question
                 </button>
-                
-                <button 
-                  onClick={() => { fetchAvailableQuizzes(); setShowImportModal(true); setShowKebabMenu(false); }} 
+
+                <button
+                  onClick={() => { setShowAIModal(true); setShowKebabMenu(false); }}
+                  className="dropdown-item"
+                >
+                  <span>✨</span> Generate with AI
+                </button>
+
+                <button
+                  onClick={() => { fetchAvailableQuizzes(); setShowImportModal(true); setShowKebabMenu(false); }}
                   className="dropdown-item"
                 >
                   <span>🔗</span> Import from Quiz
@@ -359,11 +368,19 @@ function QuestionsPage() {
       )}
 
       {showForm && (
-        <QuestionForm 
-          onClose={() => setShowForm(false)} 
+        <QuestionForm
+          onClose={() => setShowForm(false)}
           onSave={fetchQuizData}
           editingQuestion={editingQuestion}
           quizId={quizId}
+        />
+      )}
+
+      {showAIModal && (
+        <AIGenerateModal
+          quizId={quizId}
+          onClose={() => setShowAIModal(false)}
+          onSaved={fetchQuizData}
         />
       )}
     </div>
