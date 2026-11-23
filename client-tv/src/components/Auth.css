@@ -94,6 +94,31 @@
   font-size: 14px;
 }
 
+.google-signin {
+  margin-top: 20px;
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 13px;
+  margin: 18px 0;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.auth-divider span {
+  padding: 0 12px;
+}
+
 .auth-footer {
   margin-top: 25px;
   color: rgba(255, 255, 255, 0.6);

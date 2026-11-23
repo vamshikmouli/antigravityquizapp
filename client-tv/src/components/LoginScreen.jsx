@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import GoogleSignInButton from './GoogleSignInButton';
 import './Auth.css'; // Shared styles
 
 function LoginScreen() {
@@ -59,6 +60,8 @@ function LoginScreen() {
             {isLoading ? 'Logging in...' : 'Login'}
           </button>
         </form>
+
+        <GoogleSignInButton onError={setError} />
 
         <div className="auth-footer">
           Don't have an account? <Link to="/register">Register</Link>

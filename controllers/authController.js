@@ -2,7 +2,9 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { verifySsoToken, SsoError } from './ssoAuth.js';
+import { verifyGoogleToken, GoogleAuthError } from './googleAuth.js';
 import { sessionClaims } from './scope.js';
+import { randomUUID } from 'crypto';
 
 const prisma = new PrismaClient();
 // JWT_SECRET must be set in the environment. server.js refuses to boot if it is unset,
@@ -205,6 +207,101 @@ async function upsertSsoUser({ tenantId, externalId, name, schoolId, authProvide
       }
     });
   }
+}
+
+/**
+ * Standalone Google sign-in.
+ *
+ * Body: { credential }  — the Google ID token from Google Identity Services.
+ *
+ * Verifies the token, then finds-or-creates a quiz-app user for the Google
+ * identity and returns a session JWT. Phase 3 policy: each brand-new standalone
+ * signup gets its OWN tenantId (strong isolation, mirroring Phase 2). Returning
+ * users keep their tenant; a Google login whose verified email already belongs
+ * to an existing account links to it.
+ */
+export async function googleLogin(req, res) {
+  try {
+    const { credential } = req.body || {};
+
+    let profile;
+    try {
+      profile = await verifyGoogleToken(credential, process.env.GOOGLE_CLIENT_ID);
+    } catch (err) {
+      if (err instanceof GoogleAuthError) {
+        if (err.status === 500) console.error('Google config error:', err.message);
+        return res.status(err.status).json({ error: err.message });
+      }
+      throw err;
+    }
+
+    const user = await upsertGoogleUser(profile);
+    const token = jwt.sign(sessionClaims(user), JWT_SECRET, { expiresIn: '7d' });
+
+    return res.json({
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        tenantId: user.tenantId,
+        schoolId: user.schoolId,
+        authProvider: user.authProvider
+      }
+    });
+  } catch (error) {
+    console.error('Google login error:', error);
+    return res.status(500).json({ error: 'Google login failed' });
+  }
+}
+
+/**
+ * Find-or-create a quiz-app user for a verified Google profile.
+ *
+ * Lookup order:
+ *  1. existing GOOGLE user by sub (returning user — keep their tenant);
+ *  2. existing account by (verified) email — link Google to it;
+ *  3. otherwise create a brand-new standalone user with its OWN tenantId.
+ */
+export async function upsertGoogleUser(profile) {
+  const { sub, email, name } = profile;
+
+  // 1. Returning Google user.
+  let user = await prisma.user.findFirst({ where: { authProvider: 'GOOGLE', externalId: sub } });
+  if (user) {
+    return prisma.user.update({
+      where: { id: user.id },
+      data: { name: name ?? user.name, ...(email ? { email } : {}) }
+    });
+  }
+
+  // 2. Link to an existing account with this verified email.
+  if (email) {
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      return prisma.user.update({
+        where: { id: existing.id },
+        data: {
+          name: existing.name ?? name,
+          externalId: existing.externalId ?? sub,
+          // Only promote provider if this was a passwordless placeholder account.
+          authProvider: existing.authProvider === 'EMAIL' ? existing.authProvider : 'GOOGLE'
+        }
+      });
+    }
+  }
+
+  // 3. Brand-new standalone signup → its own tenant.
+  return prisma.user.create({
+    data: {
+      email: email || `google_${sub}@sso.local`,
+      name,
+      authProvider: 'GOOGLE',
+      externalId: sub,
+      tenantId: randomUUID(),
+      schoolId: null
+    }
+  });
 }
 
 /**
