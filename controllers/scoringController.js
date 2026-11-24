@@ -103,6 +103,22 @@ export async function incrementBuzzerWins(participantId) {
 }
 
 /**
+ * Undo one buzzer win (host override). Never goes below zero.
+ */
+export async function decrementBuzzerWins(participantId) {
+  try {
+    const result = await prisma.participant.updateMany({
+      where: { id: participantId, buzzerWins: { gt: 0 } },
+      data: { buzzerWins: { decrement: 1 } }
+    });
+    return result.count;
+  } catch (error) {
+    console.error('Error decrementing buzzer wins:', error);
+    throw new Error('Failed to decrement buzzer wins');
+  }
+}
+
+/**
  * Get participant's answers
  */
 export async function getParticipantAnswers(participantId) {

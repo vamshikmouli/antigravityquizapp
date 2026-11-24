@@ -1,5 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
+import { flushSync } from 'react-dom'
 import BuzzerButton from './BuzzerButton'
+
+// The pointer event's own timestamp is on the performance.now() clock in
+// modern browsers. Very old WebViews used epoch ms; fall back to now() then.
+function eventTime(e) {
+  const now = performance.now()
+  const ts = e?.timeStamp
+  return typeof ts === 'number' && ts > 0 && ts <= now + 5 && now - ts < 1000 ? ts : now
+}
 import AnswerOptions from './AnswerOptions'
 import './QuizScreen.css'
 
@@ -19,8 +28,15 @@ function QuizScreen({ socket, participantData, initialGameState }) {
   const [score, setScore] = useState(participantData?.score || 0)
   const [rank, setRank] = useState(null)
   const [isReading, setIsReading] = useState(false)
-  
+  // Fair buzzer: 'idle' | 'armed' | 'open' | 'pressed' | 'falseStart'
+  const [buzzerPhase, setBuzzerPhase] = useState('idle')
+  const [buzzResult, setBuzzResult] = useState(null) // fairness + ranking from the server
+
   const timerRef = useRef(null)
+  const roundIdRef = useRef(null)
+  const shownAtRef = useRef(null)    // performance.now() when the open buzzer was painted
+  const buzzerPhaseRef = useRef('idle')
+  const setPhase = (p) => { buzzerPhaseRef.current = p; setBuzzerPhase(p) }
 
   // Initialize from initialGameState if provided and not already set
   useEffect(() => {
@@ -62,7 +78,11 @@ function QuizScreen({ socket, participantData, initialGameState }) {
       setBuzzerStartTime(null)
       setAnswerSubmitted(false)
       setFeedback(null)
-      
+      setPhase('idle')
+      setBuzzResult(null)
+      roundIdRef.current = null
+      shownAtRef.current = null
+
       // For non-buzzer questions, enable answering immediately
       if (!['BUZZER', 'ORAL_BUZZER'].includes(data.question.type)) {
         setCanAnswer(true)
@@ -71,26 +91,51 @@ function QuizScreen({ socket, participantData, initialGameState }) {
       }
     })
     
-    // Buzzer activated
-    socket.on('buzzer-activated', () => {
-      setBuzzerActive(true)
+    // Get ready: paint the (grey) buzzer now so opening it later is one cheap frame.
+    socket.on('buzzer-armed', (data) => {
+      roundIdRef.current = data?.roundId || null
       setIsReading(false)
       setCanAnswer(false)
+      if (buzzerPhaseRef.current !== 'falseStart') setPhase('armed')
     })
-    
-    // Buzzer winner
+
+    // Buzzer open. Commit the DOM synchronously, then stamp the frame it is
+    // painted in and ack — the server uses that ack as this phone's
+    // down + render + up latency for this round.
+    socket.on('buzzer-activated', (data, ack) => {
+      if (data?.roundId) roundIdRef.current = data.roundId
+      const lockedOut = buzzerPhaseRef.current === 'falseStart'
+      flushSync(() => {
+        setBuzzerActive(true)
+        setIsReading(false)
+        setCanAnswer(false)
+        if (!lockedOut) setPhase('open')
+      })
+      const stamp = () => {
+        shownAtRef.current = performance.now()
+        if (typeof ack === 'function') ack()
+      }
+      if (document.hidden) stamp()
+      else requestAnimationFrame(stamp)
+    })
+
+    // Server says this player jumped early (or impossibly fast).
+    socket.on('buzzer-false-start', () => {
+      setPhase('falseStart')
+    })
+
+    // Buzzer winner (also re-sent if the host re-awards the buzz)
     socket.on('buzzer-winner', (data) => {
       setBuzzerWinner(data.winner)
+      setBuzzResult({ fairness: data.fairness || null, ranking: data.ranking || [] })
       setBuzzerLocked(true)
       setBuzzerStartTime(Date.now())
       setTimerPhase('BUZZER')
       setTotalTime(10) // BUZZER_ANSWER constant is 10
       setTimeRemaining(10)
-      
-      // If I'm the winner, enable answering
-      if (data.winner.participantId === participantData.id) {
-        setCanAnswer(true)
-      }
+
+      // Only the (current) winner may answer
+      setCanAnswer(data.winner.participantId === participantData.id)
     })
     
     // Buzzer locked
@@ -127,7 +172,9 @@ function QuizScreen({ socket, participantData, initialGameState }) {
     
     return () => {
       socket.off('question-started')
+      socket.off('buzzer-armed')
       socket.off('buzzer-activated')
+      socket.off('buzzer-false-start')
       socket.off('buzzer-winner')
       socket.off('buzzer-locked')
       socket.off('buzzer-timeout')
@@ -182,15 +229,29 @@ function QuizScreen({ socket, participantData, initialGameState }) {
     return () => clearInterval(timerRef.current)
   }, [currentQuestion, questionStartTime, buzzerWinner, buzzerStartTime, timerPhase])
   
-  const handleBuzzerPress = () => {
-    if (!buzzerActive || buzzerLocked || !socket) return
-    
-    const pressTime = Date.now()
-    const timeToPress = pressTime - questionStartTime
-    
+  const handleBuzzerPress = (e) => {
+    if (!socket || !currentQuestion) return
+    const tapAt = eventTime(e)
+    const phase = buzzerPhaseRef.current
+
+    if (phase === 'armed') {
+      // Tapped before it opened: false start (only ever hurts the tapper).
+      setPhase('falseStart')
+      socket.emit('buzzer-press', {
+        questionId: currentQuestion.id,
+        roundId: roundIdRef.current,
+        falseStart: true
+      })
+      return
+    }
+    if (phase !== 'open' || buzzerLocked) return
+
+    setPhase('pressed')
+    const reactionMs = shownAtRef.current != null ? Math.max(0, Math.round(tapAt - shownAtRef.current)) : null
     socket.emit('buzzer-press', {
       questionId: currentQuestion.id,
-      clientTimestamp: pressTime
+      roundId: roundIdRef.current,
+      reactionMs
     })
   }
   
@@ -303,9 +364,9 @@ function QuizScreen({ socket, participantData, initialGameState }) {
       </div>
       
       {/* Buzzer or Answer Options */}
-      {(currentQuestion.type === 'BUZZER' || currentQuestion.type === 'ORAL_BUZZER') && buzzerActive && !buzzerWinner ? (
-        <BuzzerButton 
-          active={buzzerActive && !buzzerLocked}
+      {(currentQuestion.type === 'BUZZER' || currentQuestion.type === 'ORAL_BUZZER') && buzzerPhase !== 'idle' && !buzzerWinner ? (
+        <BuzzerButton
+          phase={buzzerPhase}
           onPress={handleBuzzerPress}
           timeRemaining={timeRemaining}
         />
@@ -316,6 +377,12 @@ function QuizScreen({ socket, participantData, initialGameState }) {
               <>
                 <div className="trophy">🏆</div>
                 <h3>You buzzed first!</h3>
+                {buzzResult?.fairness?.reactionMs != null && (
+                  <p className="buzz-times">
+                    Reaction {buzzResult.fairness.reactionMs} ms
+                    {buzzResult.fairness.marginMs != null && ` · ahead by ${buzzResult.fairness.marginMs} ms`}
+                  </p>
+                )}
                 {currentQuestion.type === 'ORAL_BUZZER' ? (
                   <div className="oral-instruction">
                     <div className="mic-icon">🎤</div>
@@ -330,6 +397,15 @@ function QuizScreen({ socket, participantData, initialGameState }) {
               <>
                 <div className="lock-icon">🔒</div>
                 <h3>{buzzerWinner.participantName} buzzed first</h3>
+                {(() => {
+                  const mine = buzzResult?.ranking?.find(r => r.participantId === participantData.id)
+                  const theirs = buzzResult?.fairness?.reactionMs
+                  if (mine && theirs != null) {
+                    return <p className="buzz-times">Their reaction: {theirs} ms · yours: {mine.reactionMs} ms</p>
+                  }
+                  if (buzzerPhase === 'falseStart') return <p className="buzz-times">You were locked out (false start).</p>
+                  return null
+                })()}
                 <p>Waiting for their answer...</p>
               </>
             )}

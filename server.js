@@ -23,6 +23,8 @@ import * as musicController from './controllers/musicController.js';
 import { authenticateToken } from './middleware/authMiddleware.js';
 import { ownerScope, hostScope, tenantStamp } from './controllers/scope.js';
 import { getBuzzerManager, removeBuzzerManager } from './controllers/buzzerController.js';
+import { rttStats, pushSample, collectionWindowMs, randomArmDelay } from './controllers/fairBuzzer.js';
+import { createBuzzerAudit } from './controllers/buzzerAudit.js';
 import multer from 'multer';
 import fs from 'fs';
 
@@ -54,10 +56,13 @@ const io = new Server(httpServer, {
   cors: {
     origin: allowedOrigins,
     methods: ['GET', 'POST']
-  }
+  },
+  // Buzzer messages are tiny; compressing them only adds CPU latency.
+  perMessageDeflate: false
 });
 
 const prisma = new PrismaClient();
+const buzzerAudit = createBuzzerAudit(prisma);
 const PORT = process.env.PORT || 3000;
 
 // Configure Multer for file uploads
@@ -522,6 +527,126 @@ app.get('/api/analytics/:sessionId/export', authenticateToken, async (req, res) 
   }
 });
 
+// Buzzer audit trail for a session (host-owned only): every press with the
+// numbers used to judge it. For dispute review and threshold tuning.
+app.get('/api/sessions/:sessionId/buzzer-presses', authenticateToken, async (req, res) => {
+  try {
+    if (!(await assertSessionOwner(req.params.sessionId, req.user, res))) return;
+    const presses = await buzzerAudit.listForSession(req.params.sessionId, {
+      questionId: req.query.questionId
+    });
+    res.json({ presses });
+  } catch (error) {
+    console.error('Error listing buzzer presses:', error);
+    res.status(500).json({ error: 'Failed to load buzzer presses' });
+  }
+});
+
+// ============================================================================
+// FAIR BUZZER ORCHESTRATION (judging rules live in controllers/fairBuzzer.js)
+// ============================================================================
+
+const LATENCY_PING_INTERVAL_MS = 2000;
+const BUZZER_ACK_TIMEOUT_MS = 5000;
+
+/** Connected student sockets of a session. */
+function studentSocketsIn(sessionCode, sessionId) {
+  const ids = io.sockets.adapter.rooms.get(sessionCode) || new Set();
+  return [...ids]
+    .map((id) => io.sockets.sockets.get(id))
+    .filter((s) => s && s.data.role === 'student' && s.data.participantId && s.data.sessionId === sessionId);
+}
+
+/** Server-initiated RTT probe: a phone can delay a reply but never speed it up. */
+function startLatencyProbe(socket) {
+  stopLatencyProbe(socket);
+  socket.data.rttSamples = [];
+  const probe = () => {
+    if (!socket.connected) return;
+    const t0 = Date.now();
+    socket.timeout(LATENCY_PING_INTERVAL_MS).emit(SOCKET_EVENTS.LATENCY_PING, (err) => {
+      if (!err) pushSample(socket.data.rttSamples, Date.now() - t0);
+    });
+  };
+  probe();
+  socket.data.rttTimer = setInterval(probe, LATENCY_PING_INTERVAL_MS);
+}
+
+function stopLatencyProbe(socket) {
+  if (socket.data.rttTimer) clearInterval(socket.data.rttTimer);
+  socket.data.rttTimer = null;
+}
+
+/**
+ * Reading time -> ARMED ("get ready", tapping = false start) -> random hold ->
+ * OPEN. All timers belong to the round, so moving to another question cancels
+ * them (no stale buzzer opening on the wrong question).
+ */
+function startBuzzerRound({ sessionId, sessionCode, questionId, readingTimeSec, tenantId }) {
+  const bm = getBuzzerManager(sessionId);
+  const roundId = bm.arm(questionId);
+  bm.tenantId = tenantId ?? null;
+  bm.schedule(() => {
+    io.to(sessionCode).emit(SOCKET_EVENTS.BUZZER_ARMED, { questionId, roundId });
+    bm.schedule(() => openBuzzerRound(sessionId, sessionCode, roundId), randomArmDelay());
+  }, Math.max(0, Number(readingTimeSec) || 0) * 1000);
+}
+
+function openBuzzerRound(sessionId, sessionCode, roundId) {
+  const bm = getBuzzerManager(sessionId);
+  if (!bm.open(roundId)) return;
+  const payload = { questionId: bm.questionId, roundId };
+
+  // Phones first, each with an ack: the phone acks right after painting the
+  // open buzzer, which gives this player's real down+render+up for this round.
+  const students = studentSocketsIn(sessionCode, sessionId);
+  for (const s of students) {
+    const pid = s.data.participantId;
+    bm.recordSent(pid, Date.now());
+    s.timeout(BUZZER_ACK_TIMEOUT_MS).emit(SOCKET_EVENTS.BUZZER_ACTIVATED, payload, (err) => {
+      if (!err) bm.recordAck(pid, roundId, Date.now());
+    });
+  }
+  const studentIds = new Set(students.map((s) => s.id));
+  for (const id of io.sockets.adapter.rooms.get(sessionCode) || []) {
+    if (!studentIds.has(id)) io.sockets.sockets.get(id)?.emit(SOCKET_EVENTS.BUZZER_ACTIVATED, payload);
+  }
+}
+
+function startBuzzerAnswerTimer(bm, sessionCode) {
+  bm.setAnswerTimeout(() => {
+    // Winner didn't answer in time: reopen the question to everyone.
+    bm.deactivate();
+    io.to(sessionCode).emit(SOCKET_EVENTS.BUZZER_TIMEOUT, {
+      message: 'Buzzer winner did not answer in time. Question reopened to all.'
+    });
+  });
+}
+
+/** Close collection, broadcast the winner, then (off the hot path) persist. */
+async function announceBuzzerWinner(sessionId, sessionCode) {
+  const bm = getBuzzerManager(sessionId);
+  const result = bm.decide();
+  if (!result) return;
+
+  io.to(sessionCode).emit(SOCKET_EVENTS.BUZZER_WINNER, result);
+  io.to(sessionCode).emit(SOCKET_EVENTS.BUZZER_LOCKED, { winnerId: result.winner.participantId });
+  startBuzzerAnswerTimer(bm, sessionCode);
+
+  const presses = bm.getAllPresses();
+  const ctx = { sessionId, questionId: result.questionId, tenantId: bm.tenantId };
+  bm.enqueuePersist(() => scoringController.incrementBuzzerWins(result.winner.participantId));
+  bm.enqueuePersist(() => buzzerAudit.record(presses, ctx));
+}
+
+/** Decide immediately once every connected player has pressed or false-started. */
+function maybeCloseBuzzerEarly(sessionId, sessionCode) {
+  const bm = getBuzzerManager(sessionId);
+  if (bm.phase !== 'open' || bm.presses.size === 0) return;
+  const expected = studentSocketsIn(sessionCode, sessionId).map((s) => s.data.participantId);
+  if (bm.everyoneDone(expected)) announceBuzzerWinner(sessionId, sessionCode);
+}
+
 // ============================================================================
 // WEBSOCKET EVENT HANDLERS
 // ============================================================================
@@ -614,6 +739,7 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
           
           socket.data.participantId = participant.id;
           socket.data.participantName = participant.name;
+          startLatencyProbe(socket);
           
           // Prepare rejoin data if session is active
           let currentGameState = null;
@@ -862,29 +988,19 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
         startTime
       });
       
-      // If buzzer question, activate buzzer after readingTime
+      // Any previous round's timers die here, so a stale buzzer can never
+      // open on this question.
+      getBuzzerManager(sessionId).deactivate();
+
+      // Buzzer question: reading time -> get ready (random hold) -> open.
       if (question.type === QUESTION_TYPES.BUZZER || question.type === QUESTION_TYPES.ORAL_BUZZER) {
-        const buzzerManager = getBuzzerManager(sessionId);
-        
-        if (question.readingTime > 0) {
-          // Deactivate initially if it was somehow active
-          buzzerManager.deactivate(); 
-          
-          setTimeout(() => {
-            // Check if we are still on the same question (index hasn't changed)
-            // This is a bit tricky with current structure, but let's assume it's fine for now
-            // Or better, we can re-fetch session if needed, but usually it works.
-            buzzerManager.activate();
-            io.to(sessionCode).emit(SOCKET_EVENTS.BUZZER_ACTIVATED, {
-              questionId: question.id
-            });
-          }, question.readingTime * 1000);
-        } else {
-          buzzerManager.activate();
-          io.to(sessionCode).emit(SOCKET_EVENTS.BUZZER_ACTIVATED, {
-            questionId: question.id
-          });
-        }
+        startBuzzerRound({
+          sessionId,
+          sessionCode,
+          questionId: question.id,
+          readingTimeSec: question.readingTime || 0,
+          tenantId: session.tenantId
+        });
       }
       
     } catch (error) {
@@ -1008,52 +1124,96 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
   // BUZZER HANDLING
   // ========================================
   
-  socket.on(SOCKET_EVENTS.BUZZER_PRESS, async (data) => {
+  socket.on(SOCKET_EVENTS.BUZZER_PRESS, (data = {}) => {
+    // Stamp arrival before doing anything else.
+    const arrivedAt = Date.now();
     try {
       const { sessionId, sessionCode, participantId, participantName } = socket.data;
-      const { questionId, clientTimestamp } = data;
-      
       if (!participantId) {
         socket.emit(SOCKET_EVENTS.ERROR, { message: 'Only students can press buzzer' });
         return;
       }
-      
-      const buzzerManager = getBuzzerManager(sessionId);
-      const winner = buzzerManager.pressBuzzer(participantId, participantName, clientTimestamp);
-      
-      if (winner) {
-        // This is the first buzzer!
-        await scoringController.incrementBuzzerWins(participantId);
-        
-        // Notify everyone
-        io.to(sessionCode).emit(SOCKET_EVENTS.BUZZER_WINNER, {
-          winner: {
-            participantId: winner.participantId,
-            participantName: winner.participantName,
-            timestamp: winner.timestamp
-          },
-          questionId
-        });
-        
-        // Lock buzzer for others
-        io.to(sessionCode).emit(SOCKET_EVENTS.BUZZER_LOCKED, {
-          winnerId: winner.participantId
-        });
-        
-        // Set timeout for answer
-        buzzerManager.setAnswerTimeout(async () => {
-          // Winner didn't answer in time, reopen question
-          buzzerManager.deactivate();
-          
-          io.to(sessionCode).emit(SOCKET_EVENTS.BUZZER_TIMEOUT, {
-            message: 'Buzzer winner did not answer in time. Question reopened to all.'
-          });
-        });
+
+      const bm = getBuzzerManager(sessionId);
+      // Older phone bundles send no roundId; accept them only for the current question.
+      const roundId = data.roundId || (data.questionId && data.questionId === bm.questionId ? bm.roundId : null);
+      const result = bm.press({
+        participantId,
+        participantName,
+        roundId,
+        reactionMs: typeof data.reactionMs === 'number' ? data.reactionMs : null,
+        falseStart: data.falseStart === true,
+        arrivedAt,
+        stats: rttStats(socket.data.rttSamples)
+      });
+
+      if (result.status === 'false_start') {
+        socket.emit(SOCKET_EVENTS.BUZZER_FALSE_START, { questionId: bm.questionId, reason: result.reason });
+        maybeCloseBuzzerEarly(sessionId, sessionCode);
+        return;
       }
-      
+      if (result.status === 'late') {
+        const log = bm.getAllPresses();
+        const late = log.slice(-1);
+        const ctx = { sessionId, questionId: bm.questionId, tenantId: bm.tenantId };
+        bm.enqueuePersist(() => buzzerAudit.record(late, ctx));
+        return;
+      }
+      if (result.status !== 'accepted') return;
+
+      if (result.firstValid) {
+        // Keep collecting long enough for the slowest connected phone's press
+        // to arrive; a faster finger on a slower network can still win.
+        const windowMs = collectionWindowMs(
+          studentSocketsIn(sessionCode, sessionId).map((s) => rttStats(s.data.rttSamples))
+        );
+        const rid = bm.roundId;
+        bm.schedule(() => {
+          if (bm.roundId === rid) announceBuzzerWinner(sessionId, sessionCode);
+        }, windowMs);
+      }
+      maybeCloseBuzzerEarly(sessionId, sessionCode);
     } catch (error) {
       console.error('Error handling buzzer press:', error);
       socket.emit(SOCKET_EVENTS.ERROR, { message: 'Failed to process buzzer' });
+    }
+  });
+
+  // Host re-awards the buzz to another valid presser (e.g. the winner was
+  // flagged, or a dispute). Only before the winner has answered.
+  socket.on(SOCKET_EVENTS.BUZZER_OVERRIDE, async (data = {}) => {
+    try {
+      const { sessionId, sessionCode, role } = socket.data;
+      if (role !== 'host') {
+        socket.emit(SOCKET_EVENTS.ERROR, { message: 'Only host can re-award the buzzer' });
+        return;
+      }
+      const bm = getBuzzerManager(sessionId);
+      if (data.questionId && data.questionId !== bm.questionId) {
+        socket.emit(SOCKET_EVENTS.ERROR, { message: 'That buzzer round is over' });
+        return;
+      }
+      const o = bm.override(data.participantId);
+      if (!o.ok) {
+        socket.emit(SOCKET_EVENTS.ERROR, { message: `Cannot re-award the buzzer (${o.reason})` });
+        return;
+      }
+
+      io.to(sessionCode).emit(SOCKET_EVENTS.BUZZER_WINNER, o.result);
+      io.to(sessionCode).emit(SOCKET_EVENTS.BUZZER_LOCKED, { winnerId: o.result.winner.participantId });
+      startBuzzerAnswerTimer(bm, sessionCode);
+
+      // Queued behind the original win + audit writes, so order is guaranteed.
+      const roundId = bm.roundId;
+      const newId = o.result.winner.participantId;
+      bm.enqueuePersist(async () => {
+        if (o.previous) await scoringController.decrementBuzzerWins(o.previous);
+        await scoringController.incrementBuzzerWins(newId);
+      });
+      bm.enqueuePersist(() => buzzerAudit.markOverride({ roundId, previousId: o.previous, newId }));
+    } catch (error) {
+      console.error('Error overriding buzzer:', error);
+      socket.emit(SOCKET_EVENTS.ERROR, { message: 'Failed to re-award the buzzer' });
     }
   });
   
@@ -1082,7 +1242,7 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
       // Clear buzzer timeout if this was a buzzer question
       const buzzerManager = getBuzzerManager(sessionId);
       if (buzzerManager.locked && buzzerManager.firstBuzzer?.participantId === participantId) {
-        buzzerManager.clearAnswerTimeout();
+        buzzerManager.markAnswered(); // stops the answer timer and freezes overrides
       }
       
       // Send result to student
@@ -1308,7 +1468,8 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
   
   socket.on(SOCKET_EVENTS.DISCONNECT, async () => {
     console.log(`Client disconnected: ${socket.id}`);
-    
+    stopLatencyProbe(socket);
+
     const { sessionCode, participantId, participantName, role } = socket.data;
     
     if (sessionCode && participantId && role === 'student') {

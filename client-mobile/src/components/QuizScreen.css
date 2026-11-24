@@ -549,3 +549,10 @@
   25% { transform: translateX(-10px); }
   75% { transform: translateX(10px); }
 }
+
+.buzz-times {
+  font-size: 14px;
+  opacity: 0.8;
+  margin: 4px 0 8px;
+  font-variant-numeric: tabular-nums;
+}
