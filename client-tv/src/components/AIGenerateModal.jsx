@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import AIQuizPlanner, { QUESTION_TYPES as TYPES } from './AIQuizPlanner';
+import AIQuizPlanner, { QUESTION_TYPES as TYPES, TYPE_INFO, QuestionItem } from './AIQuizPlanner';
 import './AIGenerate.css';
 
 const DIFFICULTIES = ['easy', 'medium', 'hard'];
@@ -81,53 +81,43 @@ function QuickGenerate({ quizId, provider, authHeader, onSaved, onClose }) {
           <div>
             <label className="ai-label">Type</label>
             <select value={type} onChange={(e) => setType(e.target.value)}>
-              {TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              {TYPES.map((t) => <option key={t.value} value={t.value}>{t.icon} {t.label}</option>)}
             </select>
           </div>
           <div>
             <label className="ai-label">Difficulty</label>
             <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
-              {DIFFICULTIES.map((d) => <option key={d} value={d}>{d}</option>)}
+              {DIFFICULTIES.map((d) => <option key={d} value={d}>{d[0].toUpperCase() + d.slice(1)}</option>)}
             </select>
           </div>
         </div>
 
-        {generating && <div className="ai-round-msg"><span className="ai-spinner" /> Writing {count} questions…</div>}
-
-        {drafts.length > 0 && (
-          <section className="ai-review-round" style={{ marginTop: 18 }}>
+        {(generating || drafts.length > 0) && (
+          <section className={`ai-review-round t-${type}`}>
             <div className="ai-review-head">
-              <strong>{topic}</strong>
+              <span className="ai-type-icon">{TYPE_INFO[type]?.icon}</span>
+              <div className="ai-review-title">
+                <small>{TYPE_INFO[type]?.label} · {difficulty}</small>
+                <strong>{topic || 'Questions'}</strong>
+              </div>
               <div className="ai-review-status">
-                <span className="ai-muted">{selected.length}/{drafts.length} selected</span>
+                {generating ? <><span className="ai-spinner dim" /> Writing questions…</> : <span>{selected.length} of {drafts.length} selected</span>}
               </div>
             </div>
-            {drafts.map((q, i) => (
-              <label key={i} className={`ai-q ${q._include ? '' : 'off'}`}>
-                <input type="checkbox" checked={q._include} onChange={() => toggle(i)} />
-                <span className="ai-q-no">{i + 1}.</span>
-                <div>
-                  <div className="ai-q-text">{q.text}</div>
-                  <div className="ai-q-opts">
-                    {q.options?.length > 0
-                      ? q.options.map((o) => (
-                          <span key={o} className={o === q.correctAnswer ? 'correct' : ''}>
-                            {o === q.correctAnswer ? '✓ ' : ''}{o}
-                          </span>
-                        ))
-                      : <span className="correct">Answer: {q.correctAnswer}</span>}
-                  </div>
-                </div>
-              </label>
-            ))}
+            {generating && <div className="ai-skeleton">{Array.from({ length: Math.min(Number(count) || 3, 4) }, (_, k) => <div key={k} />)}</div>}
+            {!generating && (
+              <div className="ai-q-list">
+                {drafts.map((q, i) => <QuestionItem key={i} q={q} index={i} onToggle={() => toggle(i)} />)}
+              </div>
+            )}
           </section>
         )}
 
-        {error && <div className="ai-error">{error}</div>}
+        {error && <div className="ai-error">⚠️ {error}</div>}
       </div>
 
       <div className="ai-footer">
-        <button type="button" className="ai-btn" onClick={onClose}>Cancel</button>
+        <button type="button" className="ai-btn ai-btn-ghost" onClick={onClose}>Cancel</button>
         <span className="ai-footer-info">Default time and points; edit them after saving.</span>
         {drafts.length > 0 && (
           <button type="button" className="ai-btn" onClick={handleGenerate} disabled={generating || saving}>↻ Regenerate</button>
@@ -182,7 +172,13 @@ export default function AIGenerateModal({ quizId, startRound = 1, onClose, onSav
     <div className="modal-overlay">
       <div className="ai-modal" role="dialog" aria-modal="true" aria-label="Generate with AI">
         <div className="ai-header">
-          <h2 className="ai-title">✨ Generate with AI</h2>
+          <div className="ai-brand">
+            <span className="ai-brand-icon">✨</span>
+            <div>
+              <h2 className="ai-title">Generate with AI</h2>
+              <p className="ai-subtitle">Describe a quiz — get rounds and questions in seconds</p>
+            </div>
+          </div>
           {!noProviders && (
             <div className="ai-segment" role="tablist">
               <button type="button" role="tab" aria-selected={mode === 'plan'} className={mode === 'plan' ? 'active' : ''}
@@ -192,15 +188,18 @@ export default function AIGenerateModal({ quizId, startRound = 1, onClose, onSav
             </div>
           )}
           <span className="ai-header-spacer" />
-          {providers.length > 1 && (
-            <label className="ai-provider">
-              AI
-              <select value={provider} onChange={(e) => setProvider(e.target.value)}>
-                {providers.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-              </select>
+          {providers.length > 0 && (
+            <label className="ai-provider" title="AI provider">
+              <span className="ai-dot" />
+              <span className="ai-provider-label">AI</span>
+              {providers.length > 1 ? (
+                <select value={provider} onChange={(e) => setProvider(e.target.value)}>
+                  {providers.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+                </select>
+              ) : <span style={{ paddingRight: 10, color: 'var(--ai-text)' }}>{providers[0].label}</span>}
             </label>
           )}
-          <button type="button" className="ai-close" onClick={onClose} aria-label="Close">&times;</button>
+          <button type="button" className="ai-close" onClick={onClose} aria-label="Close">×</button>
         </div>
 
         {loadingProviders && <div className="ai-body"><div className="ai-round-msg"><span className="ai-spinner" /> Loading…</div></div>}
