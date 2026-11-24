@@ -3,29 +3,59 @@ import { useState } from 'react';
 export const QUESTION_TYPES = [
   { value: 'MULTIPLE_CHOICE', label: 'Multiple Choice' },
   { value: 'TRUE_FALSE', label: 'True / False' },
-  { value: 'BUZZER', label: 'Buzzer (with options)' },
+  { value: 'BUZZER', label: 'Buzzer (options)' },
   { value: 'ORAL_BUZZER', label: 'Oral Buzzer' },
   { value: 'SHORT_ANSWER', label: 'Short Answer' },
   { value: 'ORAL_OPEN', label: 'Oral Open' }
 ];
 const TYPE_LABEL = Object.fromEntries(QUESTION_TYPES.map((t) => [t.value, t.label]));
 const DIFFICULTIES = ['easy', 'medium', 'hard'];
+const MAX_TOTAL = 60;
 
 const EXAMPLES = [
-  'Science quiz for class 8 with 3 rounds: 5 MCQs on physics (20 s, 10 points), a buzzer round on chemistry with 4 questions (3 s reading time, +20 / −10), and 6 true/false on biology.',
-  'General knowledge quiz for college students, 4 rounds, 5 questions each, mixed types, hardest round last with negative marking.',
-  'Fun maths quiz for grade 5: rapid-fire buzzer on times tables, then short-answer word problems, 1 minute each, no negative marking.'
+  {
+    title: 'Science · class 8 · 3 rounds',
+    text: 'Science quiz for class 8 with 3 rounds: 5 MCQs on physics (20 s, 10 points), a buzzer round on chemistry with 4 questions (3 s reading time, +20 / −10), and 6 true/false on biology.'
+  },
+  {
+    title: 'General knowledge · college',
+    text: 'General knowledge quiz for college students, 4 rounds, 5 questions each, mixed types, hardest round last with negative marking.'
+  },
+  {
+    title: 'Maths · grade 5 · no negatives',
+    text: 'Fun maths quiz for grade 5: rapid-fire buzzer on times tables, then short-answer word problems, 1 minute each, no negative marking.'
+  }
 ];
 
-const card = { border: '1px solid rgba(255,255,255,0.12)', borderRadius: '12px', padding: '12px 14px', marginBottom: '10px' };
-const muted = { color: 'var(--text-muted)', fontSize: '13px' };
-const chip = { display: 'inline-block', fontSize: '12px', padding: '2px 8px', borderRadius: '999px', background: 'rgba(255,255,255,0.08)', marginRight: '6px', marginTop: '4px' };
+const TIPS = [
+  ['🔢', 'How many rounds and questions'],
+  ['🧩', 'Question type per round (MCQ, true/false, buzzer, oral, short answer)'],
+  ['⏱', 'Time limit and reading time'],
+  ['🏆', 'Points, and minus points for wrong answers'],
+  ['🎓', 'Class / audience and difficulty']
+];
 
-function NumField({ label, value, onChange, min = 0, max, suffix }) {
+const STEPS = ['Describe', 'Review plan', 'Review questions'];
+
+function Stepper({ step }) {
+  const idx = { prompt: 0, plan: 1, review: 2 }[step];
   return (
-    <div className="form-group" style={{ flex: '1 1 90px', marginBottom: 0 }}>
-      <label style={{ fontSize: '12px' }}>{label}{suffix ? ` (${suffix})` : ''}</label>
-      <input type="number" min={min} max={max} value={value}
+    <div className="ai-stepper">
+      {STEPS.map((label, i) => (
+        <div key={label} className={`ai-step ${i === idx ? 'active' : i < idx ? 'done' : ''}`}>
+          <span className="ai-step-num">{i < idx ? '✓' : i + 1}</span>
+          <span className="ai-step-label">{label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Num({ label, value, onChange, min = 0, max, className }) {
+  return (
+    <div className={className}>
+      <span className="ai-cell-label">{label}</span>
+      <input type="number" min={min} max={max} value={value} aria-label={label}
         onChange={(e) => onChange(e.target.value === '' ? '' : Number(e.target.value))} />
     </div>
   );
@@ -37,6 +67,7 @@ function NumField({ label, value, onChange, min = 0, max, suffix }) {
  *   2. plan    -> teacher reviews/edits every round's settings
  *   3. generate each round via POST /api/questions/generate (plan settings applied)
  *   4. review drafts -> save selected via the normal import flow.
+ * Renders the modal's stepper, scrollable body and footer.
  */
 export default function AIQuizPlanner({ quizId, startRound = 1, provider, authHeader, onSaved, onClose }) {
   const [step, setStep] = useState('prompt'); // prompt | plan | review
@@ -51,7 +82,7 @@ export default function AIQuizPlanner({ quizId, startRound = 1, provider, authHe
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeader },
-      body: JSON.stringify({ ...body, provider })
+      body: JSON.stringify(body)
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
@@ -64,7 +95,7 @@ export default function AIQuizPlanner({ quizId, startRound = 1, provider, authHe
     if (!prompt.trim()) { setError('Describe the quiz you want.'); return; }
     setBusy(true);
     try {
-      const data = await post('/api/ai/plan', { prompt });
+      const data = await post('/api/ai/plan', { prompt, provider });
       setPlan(data.plan);
       setRoundState({});
       setStep('plan');
@@ -94,6 +125,7 @@ export default function AIQuizPlanner({ quizId, startRound = 1, provider, authHe
     setRoundState((s) => ({ ...s, [i]: { status: 'working' } }));
     try {
       const data = await post('/api/questions/generate', {
+        provider,
         topic: r.topic || plan.topic,
         count: Number(r.count) || 5,
         type: r.type,
@@ -143,10 +175,11 @@ export default function AIQuizPlanner({ quizId, startRound = 1, provider, authHe
       ...s,
       [i]: { ...s[i], questions: s[i].questions.map((q, idx) => (idx === qi ? { ...q, _include: !q._include } : q)) }
     }));
+  const setAll = (i, on) =>
+    setRoundState((s) => ({ ...s, [i]: { ...s[i], questions: s[i].questions.map((q) => ({ ...q, _include: on })) } }));
 
-  const selected = plan
-    ? plan.rounds.flatMap((_, i) => (roundState[i]?.questions || []).filter((q) => q._include))
-    : [];
+  const allQuestions = plan ? plan.rounds.flatMap((_, i) => roundState[i]?.questions || []) : [];
+  const selected = allQuestions.filter((q) => q._include);
 
   const save = async () => {
     if (!selected.length) return;
@@ -164,183 +197,224 @@ export default function AIQuizPlanner({ quizId, startRound = 1, provider, authHe
   };
 
   const total = plan ? plan.rounds.reduce((s, r) => s + (Number(r.count) || 0), 0) : 0;
+  const maxScore = plan ? plan.rounds.reduce((s, r) => s + (Number(r.count) || 0) * (Number(r.points) || 0), 0) : 0;
+  const finished = plan ? plan.rounds.filter((_, i) => ['done', 'error'].includes(roundState[i]?.status)).length : 0;
 
   return (
     <>
-      {step === 'prompt' && (
-        <>
-          <div className="form-group">
-            <label>Describe your quiz</label>
-            <textarea
-              rows={6}
-              value={prompt}
-              maxLength={4000}
-              placeholder="How many rounds, what each round is about, question types, time limits, reading time, points, negative marking… Anything you leave out, the AI decides."
-              onChange={(e) => setPrompt(e.target.value)}
-              style={{ width: '100%', resize: 'vertical' }}
-            />
-          </div>
-          <div style={{ marginBottom: '12px' }}>
-            <div style={muted}>Try an example:</div>
-            {EXAMPLES.map((ex) => (
-              <button key={ex} type="button" onClick={() => setPrompt(ex)}
-                style={{ ...chip, border: 'none', cursor: 'pointer', textAlign: 'left', color: 'inherit', padding: '6px 10px', borderRadius: '10px', display: 'block', marginTop: '6px' }}>
-                {ex}
-              </button>
-            ))}
-          </div>
-          <button className="primary-btn" onClick={understand} disabled={busy}>
-            {busy ? 'Reading your request…' : '🧠 Plan my quiz'}
-          </button>
-        </>
-      )}
+      <Stepper step={step} />
 
-      {step === 'plan' && plan && (
-        <>
-          <div style={{ ...card, background: 'rgba(124,92,255,0.08)' }}>
-            <div style={{ fontWeight: 700, fontSize: '18px' }}>{plan.title}</div>
-            <div style={muted}>
-              {plan.rounds.length} round{plan.rounds.length === 1 ? '' : 's'} · {total} questions
-              {plan.audience ? ` · ${plan.audience}` : ''}
+      <div className="ai-body">
+        {/* ---------------- 1. Describe ---------------- */}
+        {step === 'prompt' && (
+          <div className="ai-describe">
+            <div>
+              <label className="ai-label" htmlFor="ai-prompt">Describe your quiz in your own words</label>
+              <textarea
+                id="ai-prompt"
+                value={prompt}
+                maxLength={4000}
+                autoFocus
+                placeholder={'e.g. Science quiz for class 8 with 3 rounds. Round 1: 5 MCQs on physics, 20 seconds, 10 points…\n\nAnything you leave out, the AI decides.'}
+                onChange={(e) => setPrompt(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) understand(); }}
+              />
+              <div className="ai-count">{prompt.length} / 4000 · Ctrl+Enter to plan</div>
             </div>
-            {plan.assumptions?.length > 0 && (
-              <div style={{ ...muted, marginTop: '8px' }}>
-                <strong>The AI decided:</strong>
-                <ul style={{ margin: '4px 0 0 18px', padding: 0 }}>
-                  {plan.assumptions.map((a) => <li key={a}>{a}</li>)}
-                </ul>
-              </div>
-            )}
-            {plan.warnings?.length > 0 && (
-              <div style={{ marginTop: '8px', fontSize: '13px', color: '#fbbf24' }}>
-                {plan.warnings.map((w) => <div key={w}>⚠️ {w}</div>)}
-              </div>
-            )}
+            <div className="ai-side">
+              <h4>You can mention</h4>
+              <ul className="ai-tips">
+                {TIPS.map(([icon, t]) => <li key={t}><span>{icon}</span>{t}</li>)}
+              </ul>
+              <h4>Start from an example</h4>
+              {EXAMPLES.map((ex) => (
+                <button key={ex.title} type="button" className="ai-example" onClick={() => setPrompt(ex.text)}>
+                  <strong>{ex.title}</strong>
+                  <span className="ai-muted">{ex.text}</span>
+                </button>
+              ))}
+            </div>
           </div>
+        )}
 
-          <p style={muted}>Check each round and change anything before generating.</p>
-
-          {plan.rounds.map((r, i) => (
-            <div key={i} style={card}>
-              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '8px' }}>
-                <strong style={{ whiteSpace: 'nowrap' }}>Round {Number(firstRound) + i}</strong>
-                <input type="text" value={r.name} onChange={(e) => updateRound(i, { name: e.target.value })}
-                  style={{ flex: 1 }} aria-label="Round name" />
-                {plan.rounds.length > 1 && (
-                  <button type="button" className="cancel-btn" onClick={() => removeRound(i)} title="Remove round"
-                    style={{ padding: '4px 10px' }}>✕</button>
+        {/* ---------------- 2. Review plan ---------------- */}
+        {step === 'plan' && plan && (
+          <>
+            <div className="ai-summary">
+              <div className="ai-summary-main">
+                <h3>{plan.title}</h3>
+                <div className="ai-chips">
+                  <span className="ai-chip accent">{plan.rounds.length} round{plan.rounds.length === 1 ? '' : 's'}</span>
+                  <span className="ai-chip accent">{total} questions</span>
+                  <span className="ai-chip">Max score {maxScore}</span>
+                  {plan.audience && <span className="ai-chip">{plan.audience}</span>}
+                </div>
+                {plan.assumptions?.length > 0 && (
+                  <details className="ai-details">
+                    <summary>What the AI decided for you ({plan.assumptions.length})</summary>
+                    <ul>{plan.assumptions.map((a) => <li key={a}>{a}</li>)}</ul>
+                  </details>
                 )}
-              </div>
-              <div className="form-group" style={{ marginBottom: '8px' }}>
-                <label style={{ fontSize: '12px' }}>Topic</label>
-                <input type="text" value={r.topic} onChange={(e) => updateRound(i, { topic: e.target.value })} />
-              </div>
-              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                <div className="form-group" style={{ flex: '2 1 160px', marginBottom: 0 }}>
-                  <label style={{ fontSize: '12px' }}>Type</label>
-                  <select value={r.type} onChange={(e) => updateRound(i, { type: e.target.value })}>
-                    {QUESTION_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                  </select>
-                </div>
-                <div className="form-group" style={{ flex: '1 1 100px', marginBottom: 0 }}>
-                  <label style={{ fontSize: '12px' }}>Difficulty</label>
-                  <select value={r.difficulty} onChange={(e) => updateRound(i, { difficulty: e.target.value })}>
-                    {DIFFICULTIES.map((d) => <option key={d} value={d}>{d}</option>)}
-                  </select>
-                </div>
-                <NumField label="Questions" min={1} max={20} value={r.count} onChange={(v) => updateRound(i, { count: v })} />
-              </div>
-              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '8px' }}>
-                <NumField label="Time limit" suffix="s" min={5} max={600} value={r.timeLimit} onChange={(v) => updateRound(i, { timeLimit: v })} />
-                <NumField label="Reading" suffix="s" min={0} max={60} value={r.readingTime} onChange={(v) => updateRound(i, { readingTime: v })} />
-                <NumField label="Points" min={0} value={r.points} onChange={(v) => updateRound(i, { points: v })} />
-                <NumField label="Negative" min={0} value={r.negativePoints} onChange={(v) => updateRound(i, { negativePoints: v })} />
+                {plan.warnings?.map((w) => <div key={w} className="ai-warn">⚠️ {w}</div>)}
               </div>
             </div>
-          ))}
 
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-            <button type="button" className="cancel-btn" onClick={addRound} disabled={plan.rounds.length >= 10}>＋ Add round</button>
-            <button type="button" className="cancel-btn" onClick={() => setStep('prompt')}>← Change request</button>
-            <div className="form-group" style={{ flex: '0 0 130px', marginBottom: 0 }}>
-              <label style={{ fontSize: '12px' }}>First round no.</label>
-              <input type="number" min={1} value={firstRound} onChange={(e) => setFirstRound(Math.max(1, Number(e.target.value) || 1))} />
-            </div>
-          </div>
-
-          <button className="primary-btn" style={{ marginTop: '14px' }} onClick={generateAll}
-            disabled={busy || !plan.rounds.length || total < 1 || total > 60}>
-            ✨ Generate {total} questions
-          </button>
-          {total > 60 && <div style={{ ...muted, color: '#fbbf24' }}>Max 60 questions per generation.</div>}
-        </>
-      )}
-
-      {step === 'review' && plan && (
-        <>
-          {plan.rounds.map((r, i) => {
-            const st = roundState[i] || { status: 'pending' };
-            return (
-              <div key={i} style={card}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'baseline' }}>
-                  <strong>Round {Number(firstRound) + i}: {r.name}</strong>
-                  <span style={muted}>
-                    {st.status === 'pending' && 'Waiting…'}
-                    {st.status === 'working' && 'Generating…'}
-                    {st.status === 'done' && `${st.questions.length}/${r.count} ready`}
-                    {st.status === 'error' && '❌ Failed'}
-                  </span>
-                </div>
-                <div>
-                  <span style={chip}>{TYPE_LABEL[r.type] || r.type}</span>
-                  <span style={chip}>⏱ {r.timeLimit}s</span>
-                  {Number(r.readingTime) > 0 && <span style={chip}>📖 {r.readingTime}s reading</span>}
-                  <span style={chip}>+{r.points}</span>
-                  <span style={chip}>−{r.negativePoints}</span>
-                  <span style={chip}>{r.difficulty}</span>
-                </div>
-                {st.status === 'error' && (
-                  <div style={{ marginTop: '8px', fontSize: '13px' }}>
-                    <span style={{ color: '#f87171' }}>{st.error}</span>{' '}
-                    <button type="button" className="cancel-btn" disabled={busy} onClick={() => retryRound(i)} style={{ padding: '2px 10px' }}>Retry</button>
+            <div className="ai-rounds">
+              <div className="ai-round-row ai-round-head">
+                <span>#</span><span>Round &amp; topic</span><span>Type</span><span>Difficulty</span>
+                <span>Qs</span><span>Time s</span><span>Read s</span><span>Points</span><span>Minus</span><span />
+              </div>
+              {plan.rounds.map((r, i) => (
+                <div key={i} className="ai-round-row">
+                  <span className="ai-round-num">{Number(firstRound) + i}</span>
+                  <div className="ai-round-name">
+                    <input type="text" value={r.name} aria-label="Round name" placeholder="Round name"
+                      onChange={(e) => updateRound(i, { name: e.target.value })} />
+                    <input type="text" value={r.topic} aria-label="Topic" placeholder="Topic"
+                      onChange={(e) => updateRound(i, { topic: e.target.value })} />
                   </div>
-                )}
-                {(st.questions || []).map((q, qi) => (
-                  <label key={qi} style={{ display: 'flex', gap: '10px', padding: '8px 4px', borderTop: '1px solid rgba(255,255,255,0.06)', marginTop: '8px', cursor: 'pointer', opacity: q._include ? 1 : 0.5 }}>
-                    <input type="checkbox" checked={q._include} onChange={() => toggle(i, qi)} style={{ marginTop: '4px' }} />
-                    <div>
-                      <div style={{ fontWeight: 600 }}>{q.text}</div>
-                      {q.options?.length > 0 ? (
-                        <div style={{ ...muted, marginTop: '4px' }}>
-                          {q.options.map((o) => (
-                            <span key={o} style={{ marginRight: '10px', color: o === q.correctAnswer ? '#4ade80' : undefined }}>
-                              {o === q.correctAnswer ? '✓ ' : ''}{o}
-                            </span>
-                          ))}
-                        </div>
-                      ) : (
-                        <div style={{ fontSize: '13px', color: '#4ade80', marginTop: '4px' }}>Answer: {q.correctAnswer}</div>
+                  <div className="ai-cell-type">
+                    <span className="ai-cell-label">Type</span>
+                    <select value={r.type} aria-label="Type" onChange={(e) => updateRound(i, { type: e.target.value })}>
+                      {QUESTION_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                  </div>
+                  <div className="ai-cell-diff">
+                    <span className="ai-cell-label">Difficulty</span>
+                    <select value={r.difficulty} aria-label="Difficulty" onChange={(e) => updateRound(i, { difficulty: e.target.value })}>
+                      {DIFFICULTIES.map((d) => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                  </div>
+                  <Num label="Questions" min={1} max={20} value={r.count} onChange={(v) => updateRound(i, { count: v })} />
+                  <Num label="Time (s)" min={5} max={600} value={r.timeLimit} onChange={(v) => updateRound(i, { timeLimit: v })} />
+                  <Num label="Reading (s)" min={0} max={60} value={r.readingTime} onChange={(v) => updateRound(i, { readingTime: v })} />
+                  <Num label="Points" value={r.points} onChange={(v) => updateRound(i, { points: v })} />
+                  <Num label="Minus" value={r.negativePoints} onChange={(v) => updateRound(i, { negativePoints: v })} />
+                  <button type="button" className="ai-icon-btn" title="Remove round" aria-label="Remove round"
+                    disabled={plan.rounds.length <= 1} onClick={() => removeRound(i)}>✕</button>
+                </div>
+              ))}
+            </div>
+
+            <div className="ai-plan-tools">
+              <button type="button" className="ai-btn ai-btn-sm" onClick={addRound} disabled={plan.rounds.length >= 10}>＋ Add round</button>
+              <label className="ai-inline-field">
+                Number rounds from
+                <input type="number" min={1} value={firstRound}
+                  onChange={(e) => setFirstRound(Math.max(1, Number(e.target.value) || 1))} />
+              </label>
+              {total > MAX_TOTAL && <span className="ai-warn">Max {MAX_TOTAL} questions per generation.</span>}
+            </div>
+          </>
+        )}
+
+        {/* ---------------- 3. Review questions ---------------- */}
+        {step === 'review' && plan && (
+          <>
+            {busy && (
+              <div className="ai-progress" aria-label="Generating">
+                <div style={{ width: `${Math.max(6, (finished / plan.rounds.length) * 100)}%` }} />
+              </div>
+            )}
+            {plan.rounds.map((r, i) => {
+              const st = roundState[i] || { status: 'pending' };
+              const qs = st.questions || [];
+              const on = qs.filter((q) => q._include).length;
+              return (
+                <section key={i} className="ai-review-round">
+                  <div className="ai-review-head">
+                    <span className="ai-round-num">{Number(firstRound) + i}</span>
+                    <strong>{r.name}</strong>
+                    <span className="ai-chip accent">{TYPE_LABEL[r.type] || r.type}</span>
+                    <span className="ai-chip">⏱ {r.timeLimit}s</span>
+                    {Number(r.readingTime) > 0 && <span className="ai-chip">📖 {r.readingTime}s</span>}
+                    <span className="ai-chip good">+{r.points}</span>
+                    {Number(r.negativePoints) > 0 && <span className="ai-chip bad">−{r.negativePoints}</span>}
+                    <span className="ai-chip">{r.difficulty}</span>
+                    <div className="ai-review-status">
+                      {st.status === 'done' && (
+                        <>
+                          <span className="ai-muted">{on}/{qs.length} selected</span>
+                          <button type="button" className="ai-btn ai-btn-sm" onClick={() => setAll(i, on !== qs.length)}>
+                            {on === qs.length ? 'Clear' : 'Select all'}
+                          </button>
+                        </>
                       )}
                     </div>
-                  </label>
-                ))}
-              </div>
-            );
-          })}
-          <button type="button" className="cancel-btn" disabled={busy} onClick={() => setStep('plan')}>← Back to plan</button>
-        </>
-      )}
+                  </div>
+                  {st.status === 'pending' && <div className="ai-round-msg ai-muted">Waiting…</div>}
+                  {st.status === 'working' && <div className="ai-round-msg"><span className="ai-spinner" /> Writing {r.count} questions…</div>}
+                  {st.status === 'error' && (
+                    <div className="ai-round-msg">
+                      <span style={{ color: 'var(--ai-bad)' }}>❌ {st.error}</span>
+                      <button type="button" className="ai-btn ai-btn-sm" disabled={busy} onClick={() => retryRound(i)}>Retry</button>
+                    </div>
+                  )}
+                  {st.status === 'done' && qs.length < Number(r.count) && (
+                    <div className="ai-round-msg ai-muted">The AI returned {qs.length} of {r.count} usable questions.</div>
+                  )}
+                  {qs.map((q, qi) => (
+                    <label key={qi} className={`ai-q ${q._include ? '' : 'off'}`}>
+                      <input type="checkbox" checked={q._include} onChange={() => toggle(i, qi)} />
+                      <span className="ai-q-no">{qi + 1}.</span>
+                      <div>
+                        <div className="ai-q-text">{q.text}</div>
+                        <div className="ai-q-opts">
+                          {q.options?.length > 0
+                            ? q.options.map((o) => (
+                                <span key={o} className={o === q.correctAnswer ? 'correct' : ''}>
+                                  {o === q.correctAnswer ? '✓ ' : ''}{o}
+                                </span>
+                              ))
+                            : <span className="correct">Answer: {q.correctAnswer}</span>}
+                        </div>
+                      </div>
+                    </label>
+                  ))}
+                </section>
+              );
+            })}
+          </>
+        )}
 
-      {error && <div className="error-message" style={{ marginTop: '12px' }}>{error}</div>}
+        {error && <div className="ai-error">{error}</div>}
+      </div>
 
-      {step === 'review' && (
-        <div className="modal-actions">
-          <button className="cancel-btn" onClick={onClose}>Cancel</button>
-          <button className="save-btn" disabled={busy || selected.length === 0} onClick={save}>
-            {busy ? 'Working…' : `Save ${selected.length} questions`}
-          </button>
-        </div>
-      )}
+      {/* ---------------- footer (always visible) ---------------- */}
+      <div className="ai-footer">
+        {step === 'prompt' && (
+          <>
+            <button type="button" className="ai-btn" onClick={onClose}>Cancel</button>
+            <span className="ai-footer-info">The AI reads your request and proposes rounds you can edit.</span>
+            <button type="button" className="ai-btn ai-btn-primary" onClick={understand} disabled={busy || !prompt.trim()}>
+              {busy ? <><span className="ai-spinner" /> Reading your request…</> : '🧠 Plan my quiz'}
+            </button>
+          </>
+        )}
+        {step === 'plan' && plan && (
+          <>
+            <button type="button" className="ai-btn" onClick={() => setStep('prompt')}>←<span className="ai-hide-sm"> Edit request</span></button>
+            <span className="ai-footer-info">{plan.rounds.length} rounds · {total} questions · nothing is saved yet</span>
+            <button type="button" className="ai-btn ai-btn-primary" onClick={generateAll}
+              disabled={busy || !plan.rounds.length || total < 1 || total > MAX_TOTAL}>
+              ✨ Generate {total} questions
+            </button>
+          </>
+        )}
+        {step === 'review' && (
+          <>
+            <button type="button" className="ai-btn" disabled={busy} onClick={() => setStep('plan')}>←<span className="ai-hide-sm"> Back to plan</span></button>
+            <span className="ai-footer-info">
+              {busy && finished < plan.rounds.length
+                ? `Generating round ${finished + 1} of ${plan.rounds.length}…`
+                : `${selected.length} of ${allQuestions.length} questions selected · saved in round order`}
+            </span>
+            <button type="button" className="ai-btn ai-btn-primary" disabled={busy || selected.length === 0} onClick={save}>
+              {busy && finished === plan.rounds.length ? 'Saving…' : `Save ${selected.length} questions`}
+            </button>
+          </>
+        )}
+      </div>
     </>
   );
 }

@@ -368,3 +368,13 @@ p {
     overflow-x: auto;
   }
 }
+
+/* The fixed connection/theme pill (made for the TV screen) covered the
+   ⋮ menu in admin page headers. On admin pages, tuck it bottom-right. */
+body:has(.dashboard-container) .tv-status-pill {
+  top: auto !important;
+  bottom: 16px !important;
+  right: 16px !important;
+  padding: 6px 16px !important;
+  font-size: 13px !important;
+}
