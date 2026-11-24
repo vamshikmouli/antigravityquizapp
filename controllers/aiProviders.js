@@ -32,7 +32,14 @@ async function postOnce(url, { headers = {}, body, timeoutMs = DEFAULT_TIMEOUT_M
       signal: controller.signal
     });
     const text = await res.text();
-    return { status: res.status, ok: res.ok, text };
+    return { status: res.status, ok: res.ok, text, retryAfter: Number(res.headers.get('retry-after')) || 0 };
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      const e = new Error(`Timed out after ${timeoutMs}ms`);
+      e.status = 504;
+      throw e;
+    }
+    throw err;
   } finally {
     clearTimeout(timer);
   }
@@ -47,8 +54,10 @@ async function postJson(url, opts) {
     const r = await postOnce(url, opts);
     if (r.ok) return JSON.parse(r.text);
     last = new Error(`HTTP ${r.status}: ${r.text.slice(0, 300)}`);
+    last.status = r.status;
     if (!RETRY_STATUSES.has(r.status) || attempt === MAX_ATTEMPTS) break;
-    await sleep(600 * attempt); // 600ms, 1200ms
+    // Honour Retry-After (rate limits) up to 8s, else 600ms, 1200ms.
+    await sleep(r.retryAfter ? Math.min(r.retryAfter * 1000, 8000) : 600 * attempt);
   }
   throw last;
 }

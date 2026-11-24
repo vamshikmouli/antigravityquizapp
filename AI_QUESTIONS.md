@@ -18,7 +18,7 @@ explains that no provider is configured).
 | `GROQ_API_KEY`   | Enables Groq. Key from https://console.groq.com                |
 | `GROQ_MODEL`     | Optional. Default `llama-3.3-70b-versatile`.                    |
 | `GEMINI_API_KEY` | Enables Gemini. Key from https://aistudio.google.com/app/apikey |
-| `GEMINI_MODEL`   | Optional. Default `gemini-2.0-flash`.                          |
+| `GEMINI_MODEL`   | Optional. Default `gemini-flash-latest`.                       |
 | `AI_PROVIDER`    | Optional default provider (`groq` \| `gemini`) when several are set. |
 
 No SDKs are required — providers are called over HTTPS with the built-in `fetch`.
@@ -44,6 +44,59 @@ items the model returns are dropped.
 
 **Errors:** `400` (no topic) · `503` (no provider configured) · `502` (provider
 request failed — bad key / network) · `422` (model returned nothing usable) · `500`.
+
+## Plan a whole quiz from one prompt
+
+**⋮ → Generate with AI → 🧠 Plan whole quiz** (the default tab). The teacher writes
+one request in plain words, for example:
+
+> Science quiz for class 8 with 3 rounds: 5 MCQs on physics (20 s, 10 points), a
+> buzzer round on chemistry with 4 questions (3 s reading time, +20 / −10), and 6
+> true/false on biology.
+
+1. **Understand**: `POST /api/ai/plan` turns the request into a plan. Each round
+   gets a name, topic, type, count, difficulty, time limit, reading time, points
+   and negative points. The AI follows everything the teacher stated and fills in
+   the rest from per-type defaults. It lists what it decided on its own under
+   "The AI decided".
+2. **Review the plan**: every round's settings are editable. Rounds can be added
+   or removed, and you can set the first round number. It defaults to the round
+   after the last one already in the quiz.
+3. **Generate**: each round calls `POST /api/questions/generate` in turn, which
+   is easy on free-tier rate limits. The round's settings are applied to every
+   question, and earlier questions are passed along so they are not repeated. A
+   round that fails can be retried on its own.
+4. **Review and save** the questions by round. They are saved in round order.
+
+Defaults when the prompt doesn't say (`TYPE_DEFAULTS` in `controllers/aiQuizPlan.js`):
+
+| Type | Time | Reading | Points | Negative |
+|---|---|---|---|---|
+| MULTIPLE_CHOICE | 30 s | 0 | 100 | 0 |
+| TRUE_FALSE | 15 s | 0 | 50 | 0 |
+| SHORT_ANSWER | 45 s | 0 | 100 | 0 |
+| BUZZER | 15 s | 5 s | 100 | 50 |
+| ORAL_BUZZER | 20 s | 5 s | 100 | 50 |
+| ORAL_OPEN | 60 s | 0 | 100 | 0 |
+
+Limits: 10 rounds, 20 questions per round, 60 questions in total, time 5–600 s,
+reading 0–60 s. The server clamps every value, so an unusual model reply can't
+produce an unplayable quiz.
+
+### `POST /api/ai/plan`
+```json
+{ "prompt": "3 rounds of space trivia for grade 6, -5 for wrong answers", "provider": "groq" }
+```
+**200** → `{ "provider", "plan": { title, topic, audience, totalQuestions, assumptions[], warnings[],
+rounds: [ { round, name, topic, type, count, difficulty, timeLimit, readingTime, points, negativePoints } ] } }`
+
+`/api/questions/generate` also accepts `context`, `avoid` (texts not to repeat) and
+`settings: { round, timeLimit, readingTime, points, negativePoints }`.
+
+**Errors (both):**
+- `429`: the provider is rate-limiting.
+- `503`: the provider is busy or timed out. Try again or switch provider.
+- `502`, `422`: as above.
 
 ## How saving works
 

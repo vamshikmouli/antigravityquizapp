@@ -1,12 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-
-const TYPES = [
-  { value: 'MULTIPLE_CHOICE', label: 'Multiple Choice' },
-  { value: 'TRUE_FALSE', label: 'True / False' },
-  { value: 'BUZZER', label: 'Buzzer' },
-  { value: 'SHORT_ANSWER', label: 'Short Answer' }
-];
+import AIQuizPlanner, { QUESTION_TYPES as TYPES } from './AIQuizPlanner';
 const DIFFICULTIES = ['easy', 'medium', 'hard'];
 
 /**
@@ -14,10 +8,11 @@ const DIFFICULTIES = ['easy', 'medium', 'hard'];
  * save the selected ones into the current quiz. Questions are NOT saved until
  * the teacher clicks "Save selected".
  */
-export default function AIGenerateModal({ quizId, onClose, onSaved }) {
+export default function AIGenerateModal({ quizId, startRound = 1, onClose, onSaved }) {
   const { token } = useAuth();
   const authHeader = { Authorization: `Bearer ${token}` };
 
+  const [mode, setMode] = useState('plan'); // plan (whole quiz from a prompt) | quick
   const [providers, setProviders] = useState([]);
   const [provider, setProvider] = useState('');
   const [topic, setTopic] = useState('');
@@ -100,7 +95,7 @@ export default function AIGenerateModal({ quizId, onClose, onSaved }) {
     <div className="modal-overlay">
       <div className="modal-content question-form-modal">
         <div className="modal-header">
-          <h2>✨ Generate Questions with AI</h2>
+          <h2>✨ Generate with AI</h2>
           <button className="close-btn" onClick={onClose}>&times;</button>
         </div>
 
@@ -111,6 +106,39 @@ export default function AIGenerateModal({ quizId, onClose, onSaved }) {
               {' '}on the server and restart to enable AI generation.
             </p>
           ) : (
+            <>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: '14px' }}>
+                {[['plan', '🧠 Plan whole quiz'], ['quick', '⚡ Quick questions']].map(([m, label]) => (
+                  <button key={m} type="button" onClick={() => setMode(m)}
+                    className={mode === m ? 'primary-btn' : 'cancel-btn'}
+                    style={{ padding: '6px 14px' }}>
+                    {label}
+                  </button>
+                ))}
+                {providers.length > 1 && (
+                  <div className="form-group" style={{ marginLeft: 'auto', marginBottom: 0, minWidth: '120px' }}>
+                    <label style={{ fontSize: '12px' }}>Provider</label>
+                    <select value={provider} onChange={(e) => setProvider(e.target.value)}>
+                      {providers.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+                    </select>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {!noProviders && !loadingProviders && mode === 'plan' && (
+            <AIQuizPlanner
+              quizId={quizId}
+              startRound={startRound}
+              provider={provider}
+              authHeader={authHeader}
+              onSaved={onSaved}
+              onClose={onClose}
+            />
+          )}
+
+          {!noProviders && mode === 'quick' && (
             <>
               <div className="form-group">
                 <label>Topic</label>
@@ -140,14 +168,6 @@ export default function AIGenerateModal({ quizId, onClose, onSaved }) {
                     {DIFFICULTIES.map((d) => <option key={d} value={d}>{d}</option>)}
                   </select>
                 </div>
-                {providers.length > 1 && (
-                  <div className="form-group" style={{ flex: '1 1 120px' }}>
-                    <label>Provider</label>
-                    <select value={provider} onChange={(e) => setProvider(e.target.value)}>
-                      {providers.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-                    </select>
-                  </div>
-                )}
               </div>
 
               <button className="primary-btn" onClick={handleGenerate} disabled={generating}>
@@ -185,16 +205,18 @@ export default function AIGenerateModal({ quizId, onClose, onSaved }) {
             </>
           )}
 
-          {error && <div className="error-message" style={{ marginTop: '12px' }}>{error}</div>}
+          {mode === 'quick' && error && <div className="error-message" style={{ marginTop: '12px' }}>{error}</div>}
 
-          <div className="modal-actions">
-            <button className="cancel-btn" onClick={onClose}>Cancel</button>
-            {drafts.length > 0 && (
-              <button className="save-btn" disabled={saving || selected.length === 0} onClick={handleSave}>
-                {saving ? 'Saving…' : `Save selected (${selected.length})`}
-              </button>
-            )}
-          </div>
+          {(mode === 'quick' || noProviders) && (
+            <div className="modal-actions">
+              <button className="cancel-btn" onClick={onClose}>Cancel</button>
+              {drafts.length > 0 && (
+                <button className="save-btn" disabled={saving || selected.length === 0} onClick={handleSave}>
+                  {saving ? 'Saving…' : `Save selected (${selected.length})`}
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

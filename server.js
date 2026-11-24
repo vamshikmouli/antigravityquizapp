@@ -452,8 +452,13 @@ app.post('/api/questions/import-json', authenticateToken, async (req, res) => {
     }
 
     // Stamp ownership + tenant so imported questions belong to the caller.
-    const stamped = questions.map(q => ({
+    // Quizzes play questions in createdAt order, and createMany would give every
+    // row the same timestamp, so stagger them by 1ms to keep the given order
+    // (e.g. AI rounds 1, 2, 3).
+    const base = Date.now();
+    const stamped = questions.map(({ id, createdAt, updatedAt, ...q }, i) => ({
       ...q,
+      createdAt: new Date(base + i),
       ownerId: req.user.id,
       ...tenantStamp(req.user)
     }));
@@ -468,6 +473,7 @@ app.post('/api/questions/import-json', authenticateToken, async (req, res) => {
 // AI question generation (Phase: AI). Returns DRAFT questions; the client saves
 // the chosen ones through the normal create/import flow.
 app.get('/api/ai/providers', authenticateToken, aiController.listProviders);
+app.post('/api/ai/plan', authenticateToken, aiController.planQuiz);
 app.post('/api/questions/generate', authenticateToken, aiController.generateQuestions);
 
 // Create sample questions (for testing) — authenticated; samples belong to the caller.

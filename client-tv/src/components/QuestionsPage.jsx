@@ -379,6 +379,7 @@ function QuestionsPage() {
       {showAIModal && (
         <AIGenerateModal
           quizId={quizId}
+          startRound={questions.length ? Math.max(...questions.map((q) => Number(q.round) || 1)) + 1 : 1}
           onClose={() => setShowAIModal(false)}
           onSaved={fetchQuizData}
         />

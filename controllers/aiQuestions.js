@@ -22,7 +22,7 @@ const TYPE_HINTS = {
  * Build the { system, user } messages instructing the model to return strict
  * JSON: { "questions": [ { text, options, correctAnswer, category }, ... ] }.
  */
-export function buildGenerationPrompt({ topic, count, type, difficulty }) {
+export function buildGenerationPrompt({ topic, count, type, difficulty, context, avoid }) {
   const t = SUPPORTED_TYPES.has(type) ? type : 'MULTIPLE_CHOICE';
   const hint = TYPE_HINTS[t] || TYPE_HINTS.MULTIPLE_CHOICE;
 
@@ -35,6 +35,14 @@ export function buildGenerationPrompt({ topic, count, type, difficulty }) {
     `Generate ${count} ${difficulty} difficulty quiz question(s) of type ${t} about: ${topic}.\n` +
     `Each question must have ${hint}.\n` +
     'Keep "text" clear and self-contained. "category" is a short topic label. ' +
+    (t === 'BUZZER' || t === 'ORAL_BUZZER'
+      ? 'These are buzzer questions: keep them short enough to read in a few seconds, with one crisp answer. '
+      : '') +
+    (context ? `Context: ${String(context).slice(0, 300)}.\n` : '') +
+    (Array.isArray(avoid) && avoid.length
+      ? 'Do NOT repeat or closely paraphrase any of these existing questions:\n' +
+        avoid.slice(0, 40).map((q) => `- ${String(q).slice(0, 160)}`).join('\n') + '\n'
+      : '') +
     'Return ONLY the JSON object described, with exactly a "questions" array.';
 
   return { system, user };
@@ -42,7 +50,7 @@ export function buildGenerationPrompt({ topic, count, type, difficulty }) {
 
 // Pull the first JSON value out of a raw model response (handles ```json fences
 // and leading/trailing prose).
-function extractJson(raw) {
+export function extractJson(raw) {
   if (!raw || typeof raw !== 'string') return null;
   let s = raw.trim();
   // Strip a ```json ... ``` or ``` ... ``` fence if present.
@@ -84,6 +92,7 @@ function normalizeQuestion(item, type) {
     points: clampInt(item.points, 100, 0, 100000),
     negativePoints: clampInt(item.negativePoints, 25, 0, 100000),
     timeLimit: clampInt(item.timeLimit, 30, 5, 3600),
+    readingTime: clampInt(item.readingTime, 0, 0, 600),
     round: clampInt(item.round, 1, 1, 1000),
     category: typeof item.category === 'string' && item.category.trim() ? item.category.trim() : 'General',
     optionImages: []
