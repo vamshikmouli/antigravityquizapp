@@ -1,3 +1,4 @@
+import Icon from './common/Icon'
 import { useState, useEffect } from 'react'
 
 function WaitingLobby({ socket, sessionData, userRole, audioManager }) {
@@ -79,7 +80,7 @@ function WaitingLobby({ socket, sessionData, userRole, audioManager }) {
         </div>
         {participants.length === 0 ? (
           <div className="gm-players-empty">
-            <div className="gm-pulse">📱</div>
+            <div className="gm-pulse"><Icon name="phone" /></div>
             <p>Players will appear here as they join.</p>
           </div>
         ) : (
@@ -103,15 +104,15 @@ function WaitingLobby({ socket, sessionData, userRole, audioManager }) {
             {participants.length ? `${participants.length} player${participants.length === 1 ? '' : 's'} ready` : 'Waiting for players…'}
           </span>
           {isAudioLocked && sessionData?.musicEnabled && (
-            <button className="ds-btn" onClick={handleUnlockAudio}>🔊 Enable sound</button>
+            <button className="ds-btn" onClick={handleUnlockAudio}><Icon name="volume" /> Enable sound</button>
           )}
-          <button className="ds-btn ds-btn-success ds-btn-lg" onClick={handleStartQuiz}>▶ Start quiz</button>
+          <button className="ds-btn ds-btn-success ds-btn-lg" onClick={handleStartQuiz}><Icon name="play" /> Start quiz</button>
         </div>
       ) : (
         isAudioLocked && sessionData?.musicEnabled && (
           <div className="ds-actionbar gm-lobby-bar">
             <span className="ds-muted" style={{ flex: 1 }}>Tap to allow music on this screen</span>
-            <button className="ds-btn" onClick={handleUnlockAudio}>🔊 Enable sound</button>
+            <button className="ds-btn" onClick={handleUnlockAudio}><Icon name="volume" /> Enable sound</button>
           </div>
         )
       )}

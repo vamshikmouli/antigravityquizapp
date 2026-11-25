@@ -364,31 +364,50 @@ function QuizScreen({ socket, participantData, initialGameState }) {
   
   return (
     <div className="quiz-screen fade-in">
-      {/* Header */}
-      <div className="quiz-header">
-        <div className="header-left">
-          <div className="header-top-row">
-            <div className="question-badge">
-              <span className="q-label">Q</span>
-              <span className="q-numbers">{currentQuestion.questionNumber}/{currentQuestion.totalQuestions}</span>
-            </div>
-            <div className="round-info-badge">
-              R{currentQuestion.round}
-            </div>
+      {/* Header: question/round · timer · score/rank in one compact row */}
+      <div className="quiz-header qs-top">
+        <div className="qs-col">
+          <div className="question-badge">
+            <span className="q-label">Q</span>
+            <span className="q-numbers">{currentQuestion.questionNumber}/{currentQuestion.totalQuestions}</span>
           </div>
-          
-          <div className="header-bottom-row">
-            <div className="stat-badge score-badge">
-              <div className="stat-icon">💰</div>
-              <div className="stat-details">
-                <span className="stat-label">SCORE</span>
-                <span className="stat-value">{score}</span>
-              </div>
-            </div>
+          <div className="round-info-badge">R{currentQuestion.round}</div>
+        </div>
+
+        <div className={`timer-circular-container-mobile ${timerPhase.toLowerCase()}-phase`}>
+          <svg className="timer-svg-mobile" viewBox="0 0 100 100">
+            <circle className="timer-bg-mobile" cx="50" cy="50" r="45" />
+            <circle 
+              className="timer-progress-mobile" 
+              cx="50" 
+              cy="50" 
+              r="45"
+              style={{
+                strokeDashoffset: 283 - (283 * (timeRemaining / (totalTime || 1))),
+                stroke: timeRemaining <= 3 ? 'var(--color-error)' : 
+                        timerPhase === 'READING' ? '#3498db' :
+                        timerPhase === 'BUZZER' ? 'var(--color-warning)' :
+                        'var(--color-success)'
+              }}
+            />
+          </svg>
+          <div className="timer-content-mobile">
+            <span className="timer-digits-mobile">{timeRemaining}</span>
+            <span className="timer-unit-mobile">
+              {timerPhase === 'READING' ? 'READING' : 
+               timerPhase === 'BUZZER' ? 'GO!' : 'SEC'}
+            </span>
           </div>
         </div>
 
-        <div className="header-right">
+        <div className="qs-col right">
+          <div className="stat-badge score-badge">
+            <div className="stat-icon">💰</div>
+            <div className="stat-details">
+              <span className="stat-label">SCORE</span>
+              <span className="stat-value">{score}</span>
+            </div>
+          </div>
           {rank && (
             <div className="stat-badge rank-badge">
               <div className="stat-icon">🏆</div>
@@ -400,34 +419,7 @@ function QuizScreen({ socket, participantData, initialGameState }) {
           )}
         </div>
       </div>
-      
-      {/* Circular Timer */}
-      <div className={`timer-circular-container-mobile ${timerPhase.toLowerCase()}-phase`}>
-        <svg className="timer-svg-mobile" viewBox="0 0 100 100">
-          <circle className="timer-bg-mobile" cx="50" cy="50" r="45" />
-          <circle 
-            className="timer-progress-mobile" 
-            cx="50" 
-            cy="50" 
-            r="45"
-            style={{
-              strokeDashoffset: 283 - (283 * (timeRemaining / (totalTime || 1))),
-              stroke: timeRemaining <= 3 ? 'var(--color-error)' : 
-                      timerPhase === 'READING' ? '#3498db' :
-                      timerPhase === 'BUZZER' ? 'var(--color-warning)' :
-                      'var(--color-success)'
-            }}
-          />
-        </svg>
-        <div className="timer-content-mobile">
-          <span className="timer-digits-mobile">{timeRemaining}</span>
-          <span className="timer-unit-mobile">
-            {timerPhase === 'READING' ? 'READING' : 
-             timerPhase === 'BUZZER' ? 'GO!' : 'SEC'}
-          </span>
-        </div>
-      </div>
-      
+
       {/* Question */}
       <div className="question-container">
         {currentQuestion.imageUrl && (

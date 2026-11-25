@@ -124,7 +124,8 @@ function App() {
     <BrowserRouter>
       <div className="container">
         {/* Status Bar */}
-        <div className="ph-status">
+        {/* During a question this pill only shows when the connection drops, so it never covers an answer. */}
+        <div className={`ph-status${sessionCode && quizStatus === 'active' ? ' in-quiz' : ''}${connected ? '' : ' down'}`}>
           <ThemeToggle style={{ width: '24px', height: '24px', fontSize: '0.8rem', background: 'none', border: 'none', padding: 0 }} />
           <div className="ph-status-conn">
             <span className={`status-dot ${connected ? 'connected' : 'disconnected'}`}></span>

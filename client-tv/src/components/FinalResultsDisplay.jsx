@@ -1,3 +1,4 @@
+import Icon from './common/Icon';
 import React, { useEffect } from 'react';
 import ResultsTable from './ResultsTable';
 
@@ -27,9 +28,9 @@ const FinalResultsDisplay = ({ analytics, sessionCode, audioManager, onClose }) 
         <div className="ds-kicker">Quiz complete</div>
         <h1>And the winners <span className="ds-grad-text">are…</span></h1>
         <div className="ds-row" style={{ justifyContent: 'center' }}>
-          <span className="ds-chip">👥 {totalStudents} players</span>
-          <span className="ds-chip">📈 Average {averageScore}</span>
-          <span className="ds-chip">🔑 {sessionCode}</span>
+          <span className="ds-chip"><Icon name="users" /> {totalStudents} players</span>
+          <span className="ds-chip"><Icon name="trophy" /> Average {averageScore}</span>
+          <span className="ds-chip" title="Session code">{sessionCode}</span>
         </div>
       </header>
 

@@ -52,7 +52,7 @@ class AudioManager {
         try {
           const audio = new Audio(trackUrls[type]);
           audio.volume = this.volume;
-          audio.loop = true; // Loop background music
+          audio.loop = type !== 'ANSWER'; // background music loops; the answer reveal plays once
           audio.preload = 'auto';
           this.tracks[type] = audio;
         } catch (e) {

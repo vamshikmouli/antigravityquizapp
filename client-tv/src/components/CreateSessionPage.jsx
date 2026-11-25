@@ -1,3 +1,4 @@
+import Icon from './common/Icon';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
@@ -97,7 +98,7 @@ function CreateSessionPage() {
 
       {!loading && quizzes.length === 0 && (
         <div className="ds-empty">
-          <span className="ds-tile lg grad">📚</span>
+          <span className="ds-tile lg grad"><Icon name="book" /></span>
           <h3>No quizzes yet</h3>
           <p>Create a quiz first — AI can plan the rounds and questions for you.</p>
           <Link to="/quizzes" className="ds-btn ds-btn-primary">Create a quiz</Link>
@@ -127,7 +128,7 @@ function CreateSessionPage() {
           <div className="ds-section-title"><h2>Settings</h2></div>
           <div className="ds-card" style={{ maxWidth: 560, display: 'grid', gap: 16 }}>
             <div className="ds-row" style={{ flexWrap: 'nowrap' }}>
-              <span className="ds-tile" style={{ '--c': '#f472b6' }}>🎵</span>
+              <span className="ds-tile" style={{ '--c': '#f472b6', color: '#f472b6' }}><Icon name="music" /></span>
               <div style={{ flex: 1 }}>
                 <h3 style={{ fontSize: 15 }}>Background music</h3>
                 <p>Plays on this screen only. <Link to="/music-settings" className="ds-link">Manage tracks</Link></p>
@@ -153,7 +154,7 @@ function CreateSessionPage() {
 
       {selectedQuiz && (
         <div className="ds-actionbar">
-          <span className="ds-tile grad" style={{ width: 40, height: 40, fontSize: 18 }}>🚀</span>
+          <span className="ds-tile grad" style={{ width: 40, height: 40, fontSize: 18 }}><Icon name="play" /></span>
           <div style={{ minWidth: 0, flex: 1 }}>
             <strong style={{ display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{selectedQuiz.title}</strong>
             <span className="ds-muted" style={{ fontSize: 13 }}>

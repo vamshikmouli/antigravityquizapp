@@ -3,6 +3,7 @@ import Leaderboard from './Leaderboard'
 import FinalResultsDisplay from './FinalResultsDisplay'
 import { SOCKET_EVENTS, TIME_LIMITS } from '../../../shared/constants'
 import MusicControls from './MusicControls'
+import Icon from './common/Icon'
 import { TurnCard, ClueBoardTV, TurnToast, TeamRoundRecap, formatLabel } from './TeamBits'
 import './QuestionDisplay.css'
 
@@ -17,6 +18,25 @@ const FLAG_INFO = {
 }
 const SERIOUS_FLAGS = new Set(['CLAMPED', 'BOT_PATTERN'])
 
+/** Countdown ring for the header: drains clockwise, turns red for the last 5 seconds. */
+function TimerRing({ remaining, total, phase }) {
+  const r = 44, c = 2 * Math.PI * r
+  const frac = total > 0 ? Math.max(0, Math.min(1, remaining / total)) : 0
+  const low = phase !== 'READING' && remaining <= 5
+  return (
+    <div className={`tv-timer ${phase.toLowerCase()} ${low ? 'low' : ''}`} role="timer" aria-label={`${remaining} seconds left`}>
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <circle cx="50" cy="50" r={r} className="tv-timer-track" />
+        <circle cx="50" cy="50" r={r} className="tv-timer-bar" strokeDasharray={c} strokeDashoffset={c * (1 - frac)} />
+      </svg>
+      <div className="tv-timer-text">
+        <b>{remaining}</b>
+        <small>{phase === 'READING' ? 'Read' : phase === 'BUZZER' ? 'Buzz' : 'Sec'}</small>
+      </div>
+    </div>
+  )
+}
+
 /** Host panel: who pressed, their judged times, flags, and re-award buttons. */
 function BuzzReview({ result, winnerId, canOverride, onAward }) {
   const winnerFlags = result.ranking.find(r => r.participantId === winnerId)?.flags || []
@@ -26,7 +46,7 @@ function BuzzReview({ result, winnerId, canOverride, onAward }) {
   return (
     <div className={`buzz-review ${suspicious ? 'suspicious' : ''} ${open ? 'open' : ''}`}>
       <button className="buzz-review-toggle" onClick={() => setOpen(o => !o)} aria-expanded={open}>
-        <span className="buzz-review-icon">{suspicious ? '⚠️' : '⏱'}</span>
+        <span className="buzz-review-icon"><Icon name={suspicious ? 'alert' : 'clock'} /></span>
         <span className="buzz-review-title">{suspicious ? 'Check this buzz' : 'Buzz details'}</span>
         <span className="buzz-review-meta">
           {result.ranking.length} buzz{result.ranking.length === 1 ? '' : 'es'}
@@ -38,7 +58,7 @@ function BuzzReview({ result, winnerId, canOverride, onAward }) {
         <ol className="buzz-review-list">
           {result.ranking.map((r, i) => (
             <li key={r.participantId} className={r.participantId === winnerId ? 'is-winner' : ''}>
-              <span className="buzz-pos">{r.participantId === winnerId ? '🏆' : i + 1}</span>
+              <span className="buzz-pos">{r.participantId === winnerId ? <Icon name="trophy" /> : i + 1}</span>
               <span className="buzz-name">{r.participantName}</span>
               <span className="buzz-bar"><i style={{ width: `${Math.max(6, ((r.reactionMs || 0) / slowest) * 100)}%` }} /></span>
               <span className="buzz-ms">{r.reactionMs} ms</span>
@@ -101,18 +121,6 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
   const [participants, setParticipants] = useState([]);
   const [selectedParticipant, setSelectedParticipant] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-
-  // Floating Timer State
-  // Default: bottom-right of the main area, clear of the question text and host controls.
-  const [timerPos, setTimerPos] = useState(() => ({
-    x: Math.max(20, (typeof window !== 'undefined' ? window.innerWidth : 1600) - Math.max(240, Math.min(360, window.innerWidth * 0.19)) - 170),
-    y: Math.max(100, (typeof window !== 'undefined' ? window.innerHeight : 900) - 170)
-  }));
-  const [timerScale, setTimerScale] = useState(1);
-  const [isDragging, setIsDragging] = useState(false);
-  const [isResizing, setIsResizing] = useState(false);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const timerDragRef = useRef(null);
 
   const timerRef = useRef(null)
 
@@ -319,52 +327,6 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
     }
   }, [currentQuestion, questionStartTime, isBuzzerPhase, buzzerStartTime, timerPhase])
 
-  // Dragging Logic
-  useEffect(() => {
-    const handleMouseMove = (e) => {
-      if (isDragging) {
-        setTimerPos({
-          x: e.clientX - dragOffset.x,
-          y: e.clientY - dragOffset.y
-        });
-      }
-      if (isResizing) {
-        const rect = timerDragRef.current.getBoundingClientRect();
-        const newScale = Math.max(0.5, Math.min(3, (e.clientX - rect.left) / 100)); // Simple scale logic
-        setTimerScale(newScale);
-      }
-    };
-
-    const handleMouseUp = () => {
-      setIsDragging(false);
-      setIsResizing(false);
-    };
-
-    if (isDragging || isResizing) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-    }
-
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDragging, isResizing, dragOffset]);
-
-  const startDrag = (e) => {
-    if (e.target.classList.contains('resize-handle')) return;
-    setIsDragging(true);
-    setDragOffset({
-      x: e.clientX - timerPos.x,
-      y: e.clientY - timerPos.y
-    });
-  };
-
-  const startResize = (e) => {
-    e.stopPropagation();
-    setIsResizing(true);
-  };
-  
   if (!currentQuestion) {
     return (
       <div className="question-display-tv">
@@ -407,7 +369,7 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
                onClick={() => socket.emit('next-question', { force: true })}
                className="start-round-btn"
             >
-              Start Round {roundResults.nextRound} ⏭️
+              Start Round {roundResults.nextRound} <Icon name="arrow-right" />
             </button>
           )}
         </div>
@@ -422,7 +384,7 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
     3: 'var(--color-option-d)'
   }
   
-  const optionLabels = ['A', 'B', 'C', 'D']
+  const optionLabels = 'ABCDEFGH'
   
   return (
     <div className="question-display-tv fade-in">
@@ -433,7 +395,7 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
           <div className="question-header">
             <div className="question-meta">
               <span className="question-number-tv">
-                Question {currentQuestion.questionNumber}/{currentQuestion.totalQuestions}
+                Question <b>{currentQuestion.questionNumber}</b><span>/{currentQuestion.totalQuestions}</span>
               </span>
               <span className="round-badge-tv">{currentQuestion.roundName || `Round ${currentQuestion.round}`}</span>
               {currentQuestion.format && <span className="tm-chip">{formatLabel(currentQuestion.format)}</span>}
@@ -447,13 +409,14 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
                 )}
               </div>
               
+              <TimerRing remaining={timeRemaining} total={totalTime} phase={timerPhase} />
               {userRole === 'host' && (
                 <button
-                  onClick={() => socket.emit('end-quiz')}
+                  onClick={() => { if (window.confirm('End the quiz now? Final results will be shown.')) socket.emit('end-quiz') }}
                   className="control-btn end-btn header-end-quiz"
-                  title="End Quiz"
+                  title="End quiz"
                 >
-                  ⏹️
+                  <Icon name="stop" /> End
                 </button>
               )}
             </div>
@@ -477,7 +440,7 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
               {!showResults && (
                 <div className="tm-clue-status">
                   <span className="tm-worth-tv">Worth <b>{currentQuestion.pointsNow}</b> pts now</span>
-                  {clueLocked.length > 0 && <span className="tm-locked-tv">🔒 {participants.filter((p) => clueLocked.includes(p.id)).map((p) => p.name).join(', ') || `${clueLocked.length} locked out`}</span>}
+                  {clueLocked.length > 0 && <span className="tm-locked-tv"><Icon name="lock" /> {participants.filter((p) => clueLocked.includes(p.id)).map((p) => p.name).join(', ') || `${clueLocked.length} locked out`}</span>}
                 </div>
               )}
             </>
@@ -500,7 +463,7 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
               {/* Buzzer Winner Display - Compact One Line */}
               {buzzerWinner && (
                 <div className="buzz-winner-card" key={buzzerWinner.participantId}>
-                  <span className="buzz-winner-avatar">{buzzerWinner.participantName?.charAt(0).toUpperCase()}<i>🔔</i></span>
+                  <span className="buzz-winner-avatar">{buzzerWinner.participantName?.charAt(0).toUpperCase()}<i><Icon name="bell" /></i></span>
                   <div className="buzz-winner-text">
                     <small>{buzzResult?.fairness?.overridden ? 'Awarded by host' : 'First to buzz'}</small>
                     <strong>{buzzerWinner.participantName}</strong>
@@ -521,12 +484,12 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
             <div className="oral-buzzer-info card-gradient">
               {!buzzerWinner ? (
                 <div className="waiting-buzz">
-                  <div className="pulse-icon">⚡</div>
+                  <div className="pulse-icon"><Icon name="zap" /></div>
                   <p>Wait for the Buzzer!</p>
                 </div>
               ) : (
                 <div className="answering-now">
-                  <div className="pulse-icon">🎤</div>
+                  <div className="pulse-icon"><Icon name="mic" /></div>
                   <p>Answering Orally...</p>
                 </div>
               )}
@@ -572,7 +535,7 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
                           }}
                           className="control-btn correct-btn-large"
                         >
-                          Correct ✅
+                          <Icon name="check" /> Correct
                         </button>
                         <button
                           onClick={() => {
@@ -585,7 +548,7 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
                           }}
                           className="control-btn incorrect-btn-large"
                         >
-                          Wrong ❌
+                          <Icon name="x" /> Wrong
                         </button>
                       </div>
                     </div>
@@ -594,7 +557,7 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
               ) : (
                 <div className="oral-buzzer-info card-gradient">
                    <div className="waiting-buzz">
-                    <div className="pulse-icon">🎤</div>
+                    <div className="pulse-icon"><Icon name="mic" /></div>
                     <p>{showResults ? 'Answered Orally' : 'Listen to Host'}</p>
                   </div>
                 </div>
@@ -607,7 +570,7 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
                   key={index}
                   className={`answer-card-tv ${showResults && option === currentQuestion.correctAnswer ? 'correct' : ''} ${showResults && option !== currentQuestion.correctAnswer ? 'dimmed' : ''}`}
                   style={{
-                    '--option-color': optionColors[index],
+                    '--option-color': optionColors[index % 4],
                     animationDelay: `${index * 100}ms`
                   }}
                 >
@@ -619,7 +582,7 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
                     <div className="option-text-tv">{option}</div>
                   </div>
                   {showResults && option === currentQuestion.correctAnswer && (
-                    <div className="correct-indicator">✓</div>
+                    <div className="correct-indicator"><Icon name="circle-check" /></div>
                   )}
                 </div>
               ))}
@@ -644,19 +607,19 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
             <div className="host-controls">
               {currentQuestion.format === 'DIRECTED' && turn && !showResults && (
                 <div className="oral-marking-controls">
-                  <button onClick={() => socket.emit('mark-turn', { questionId: currentQuestion.id, isCorrect: true })} className="control-btn correct-btn-large">✓ {turn.name} correct</button>
-                  <button onClick={() => socket.emit('mark-turn', { questionId: currentQuestion.id, isCorrect: false })} className="control-btn incorrect-btn-large">✗ Wrong{turn.isPass ? '' : ' · pass'}</button>
+                  <button onClick={() => socket.emit('mark-turn', { questionId: currentQuestion.id, isCorrect: true })} className="control-btn correct-btn-large"><Icon name="check" /> {turn.name} correct</button>
+                  <button onClick={() => socket.emit('mark-turn', { questionId: currentQuestion.id, isCorrect: false })} className="control-btn incorrect-btn-large"><Icon name="x" /> Wrong{turn.isPass ? '' : ' · pass'}</button>
                 </div>
               )}
               {currentQuestion.type === 'CLUE' && !showResults && (
                 buzzerWinner ? (
                   <div className="oral-marking-controls">
-                    <button onClick={() => socket.emit('mark-turn', { questionId: currentQuestion.id, isCorrect: true })} className="control-btn correct-btn-large">✓ Correct +{currentQuestion.pointsNow}</button>
-                    <button onClick={() => socket.emit('mark-turn', { questionId: currentQuestion.id, isCorrect: false })} className="control-btn incorrect-btn-large">✗ Wrong{currentQuestion.negativePoints ? ` −${currentQuestion.negativePoints}` : ''}</button>
+                    <button onClick={() => socket.emit('mark-turn', { questionId: currentQuestion.id, isCorrect: true })} className="control-btn correct-btn-large"><Icon name="check" /> Correct +{currentQuestion.pointsNow}</button>
+                    <button onClick={() => socket.emit('mark-turn', { questionId: currentQuestion.id, isCorrect: false })} className="control-btn incorrect-btn-large"><Icon name="x" /> Wrong{currentQuestion.negativePoints ? ` −${currentQuestion.negativePoints}` : ''}</button>
                   </div>
                 ) : (currentQuestion.clues?.length || 0) < (currentQuestion.cluesTotal || 0) && (
                   <button onClick={() => socket.emit('reveal-clue', { questionId: currentQuestion.id })} className="control-btn results-btn">
-                    🔍 Reveal clue {(currentQuestion.clues?.length || 0) + 1} · {currentQuestion.cluePoints?.[currentQuestion.clues?.length || 0]} pts
+                    <Icon name="search" /> Reveal clue {(currentQuestion.clues?.length || 0) + 1} · {currentQuestion.cluePoints?.[currentQuestion.clues?.length || 0]} pts
                   </button>
                 )
               )}
@@ -669,7 +632,7 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
                     })}
                     className="control-btn correct-btn-large"
                   >
-                    Mark Correct ✅
+                    <Icon name="check" /> Mark correct
                   </button>
                   <button
                     onClick={() => socket.emit('mark-buzzer-incorrect', { 
@@ -678,7 +641,7 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
                     })}
                     className="control-btn incorrect-btn-large"
                   >
-                    Mark Wrong ❌
+                    <Icon name="x" /> Mark wrong
                   </button>
                 </div>
               )}
@@ -688,7 +651,7 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
                   onClick={() => socket.emit('show-results')}
                   className="control-btn results-btn"
                 >
-                  Show Answer 👁️
+                  <Icon name="eye" /> Show answer
                 </button>
               )}
 
@@ -697,46 +660,27 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
                   onClick={() => socket.emit('next-question')}
                   className="control-btn next-btn"
                 >
-                  Next Question ⏭️
+                  Next question <Icon name="arrow-right" />
                 </button>
               )}
 
               {/* Inline Results Stats */}
               {showResults && questionResults && (
                 <div className="results-summary-inline">
-                  <div className="res-stat"><span className="stat-label">✅</span> {questionResults.correctCount}</div>
-                  <div className="res-stat"><span className="stat-label">❌</span> {questionResults.incorrectCount}</div>
+                  <div className="res-stat good" title="Correct"><Icon name="circle-check" /> {questionResults.correctCount}</div>
+                  <div className="res-stat bad" title="Wrong"><Icon name="circle-x" /> {questionResults.incorrectCount}</div>
                 </div>
               )}
             </div>
           )}
 
-          {/* Floating Draggable Timer */}
-          <div 
-            ref={timerDragRef}
-            className={`floating-timer ${timerPhase.toLowerCase()}-phase ${isDragging ? 'dragging' : ''}`}
-            style={{ 
-              left: `${timerPos.x}px`, 
-              top: `${timerPos.y}px`,
-              transform: `scale(${timerScale})`
-            }}
-            onMouseDown={startDrag}
-          >
-            <div className="timer-val">{timeRemaining}</div>
-            <div className="timer-lbl">
-              {timerPhase === 'READING' ? 'READ' : 
-               timerPhase === 'BUZZER' ? 'BUZZ' : 'SEC'}
-            </div>
-            <div className="resize-handle" onMouseDown={startResize}></div>
-          </div>
-
           {/* Detailed Results (Names) - Kept separate but shrunken */}
           {showResults && questionResults && userRole === 'host' && (
             <div className="detailed-results-host slide-in-bottom">
                <div className="names-row">
-                  <span className="names-correct"><strong>✓</strong> {questionResults.correctNames.join(', ') || 'None'}</span>
+                  <span className="names-correct"><Icon name="check" /> {questionResults.correctNames.join(', ') || 'None'}</span>
                   {questionResults.incorrectNames.length > 0 && (
-                    <span className="names-incorrect"><strong>✗</strong> {questionResults.incorrectNames.join(', ')}</span>
+                    <span className="names-incorrect"><Icon name="x" /> {questionResults.incorrectNames.join(', ')}</span>
                   )}
                </div>
             </div>
@@ -746,11 +690,10 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
         {/* Sidebar - Leaderboard */}
         <div className="sidebar">
           <Leaderboard leaderboard={leaderboard} buzzerWinner={buzzerWinner} />
+          <MusicControls audioManager={audioManager} sessionData={sessionData} inline />
         </div>
       </div>
 
-      {/* Global Music Controls */}
-      <MusicControls audioManager={audioManager} sessionData={sessionData} />
     </div>
   )
 }

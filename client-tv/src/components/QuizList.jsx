@@ -1,3 +1,4 @@
+import Icon from './common/Icon';
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -99,7 +100,7 @@ function QuizList() {
 
       {!loading && quizzes.length === 0 && (
         <div className="ds-empty">
-          <span className="ds-tile lg grad">📚</span>
+          <span className="ds-tile lg grad"><Icon name="book" /></span>
           <h3>Create your first quiz</h3>
           <p>A quiz holds your rounds and questions. Add them by hand, import them, or let AI plan the whole thing.</p>
           <button type="button" onClick={() => setShowAddModal(true)} className="ds-btn ds-btn-primary">＋ New quiz</button>
@@ -119,7 +120,7 @@ function QuizList() {
                 <span className="ds-tile lg" style={{ fontWeight: 800, fontSize: 22 }}>{quiz.title.trim()[0]?.toUpperCase() || '?'}</span>
                 <span className="ds-spacer" />
                 <button type="button" className="ds-icon-btn danger" title="Delete quiz" aria-label={`Delete ${quiz.title}`}
-                  onClick={() => handleDeleteQuiz(quiz.id, quiz.title)}>🗑️</button>
+                  onClick={() => handleDeleteQuiz(quiz.id, quiz.title)}><Icon name="trash" size={16} /></button>
               </div>
               <Link to={`/quizzes/${quiz.id}`} style={{ color: 'inherit', textDecoration: 'none' }}>
                 <h3 style={{ fontSize: 18 }}>{quiz.title}</h3>
@@ -139,7 +140,7 @@ function QuizList() {
         <div className="ds-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowAddModal(false); }}>
           <form className="ds-modal" onSubmit={handleCreateQuiz}>
             <div className="ds-modal-header">
-              <span className="ds-tile grad">📚</span>
+              <span className="ds-tile grad"><Icon name="book" /></span>
               <div>
                 <h2>New quiz</h2>
                 <p>You can add questions — or generate them with AI — next.</p>

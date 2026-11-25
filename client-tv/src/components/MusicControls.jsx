@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import './MusicControls.css';
+import Icon from './common/Icon';
 
-const MusicControls = ({ audioManager, sessionData }) => {
+// inline: sits in the page flow (e.g. under the TV leaderboard) instead of floating.
+const MusicControls = ({ audioManager, sessionData, inline = false }) => {
   const [isMuted, setIsMuted] = useState(audioManager?.isMuted || false);
   const [volume, setVolume] = useState(Math.round((audioManager?.volume || 0.5) * 100));
 
@@ -80,23 +82,26 @@ const MusicControls = ({ audioManager, sessionData }) => {
 
   return (
     <div 
-      className={`global-music-controls card-glass fade-in ${isDragging ? 'dragging' : ''}`}
-      style={{
+      className={`global-music-controls card-glass fade-in ${inline ? 'inline' : ''} ${isDragging ? 'dragging' : ''}`}
+      style={inline ? undefined : {
         left: `${position.x}px`,
         top: `${position.y}px`,
         position: 'fixed',
         bottom: 'auto',
         right: 'auto'
       }}
-      onMouseDown={handleMouseDown}
+      onMouseDown={inline ? undefined : handleMouseDown}
     >
-      <div className="drag-handle" title="Drag to move">⠿</div>
+      {inline
+        ? <span className="music-inline-label"><Icon name="music" /> Music</span>
+        : <div className="drag-handle" title="Drag to move"><Icon name="grip" /></div>}
       <button 
         className="music-btn" 
         onClick={handleToggleMute}
         title={isMuted ? "Unmute" : "Mute"}
+        aria-label={isMuted ? "Unmute music" : "Mute music"}
       >
-        {isMuted ? '🔇' : '🔊'}
+        <Icon name={isMuted ? 'mute' : 'volume'} />
       </button>
       <div className="volume-slider-container">
         <input 
@@ -106,6 +111,8 @@ const MusicControls = ({ audioManager, sessionData }) => {
           value={volume} 
           onChange={handleVolumeChange}
           className="global-volume-slider"
+          aria-label="Music volume"
+          style={{ '--v': `${volume}%` }}
         />
         <span className="volume-label">{volume}%</span>
       </div>

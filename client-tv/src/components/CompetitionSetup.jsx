@@ -1,3 +1,4 @@
+import Icon from './common/Icon';
 import { useState } from 'react';
 
 const FORMATS = [
@@ -73,7 +74,7 @@ export default function CompetitionSetup({ quiz, questions, token, onClose, onSa
     <div className="ds-overlay">
       <div className="ds-modal wide">
         <div className="ds-modal-header">
-          <span className="ds-tile grad">🏆</span>
+          <span className="ds-tile grad"><Icon name="trophy" /></span>
           <div>
             <h2>Competition setup</h2>
             <p>How groups play each round, passing and elimination.</p>
@@ -84,11 +85,11 @@ export default function CompetitionSetup({ quiz, questions, token, onClose, onSa
         <div className="ds-modal-body">
           <div className="cs-modes">
             <button type="button" className={`cs-mode ${mode === 'CLASSIC' ? 'active' : ''}`} onClick={() => setMode('CLASSIC')}>
-              <span className="ds-tile" style={{ '--c': '#38bdf8' }}>📱</span>
+              <span className="ds-tile" style={{ '--c': '#38bdf8', color: '#38bdf8' }}><Icon name="phone" /></span>
               <div><strong>Classic</strong><span>Every student plays on their own phone and answers every question.</span></div>
             </button>
             <button type="button" className={`cs-mode ${mode === 'TEAMS' ? 'active' : ''}`} onClick={() => setMode('TEAMS')}>
-              <span className="ds-tile" style={{ '--c': '#a855f7' }}>👥</span>
+              <span className="ds-tile" style={{ '--c': '#a855f7', color: '#a855f7' }}><Icon name="users" /></span>
               <div><strong>Group competition</strong><span>One phone per group. Directed questions with passes, buzzer and clue rounds, elimination.</span></div>
             </button>
           </div>
@@ -99,7 +100,7 @@ export default function CompetitionSetup({ quiz, questions, token, onClose, onSa
                 <strong>Rounds</strong>
                 <span className="ds-muted" style={{ fontSize: 13 }}>{totalOut ? `${totalOut} group${totalOut > 1 ? 's' : ''} eliminated in total` : 'No elimination'}</span>
                 <span className="ds-spacer" />
-                <button type="button" className="ds-btn ds-btn-sm" onClick={applyPreset} title="General · Visual · Rapid fire · Buzzer · Clue">✨ Use 5-round group format</button>
+                <button type="button" className="ds-btn ds-btn-sm" onClick={applyPreset} title="General · Visual · Rapid fire · Buzzer · Clue"><Icon name="sparkles" /> Use 5-round group format</button>
               </div>
 
               <div style={{ display: 'grid', gap: 10 }}>
@@ -156,11 +157,11 @@ export default function CompetitionSetup({ quiz, questions, token, onClose, onSa
                 })}
               </div>
               <div className="ds-alert info" style={{ marginTop: 14 }}>
-                💡 Timing, points and minus points come from each question. Groups join with their group name; directed questions rotate through the groups in join order.
+                Timing, points and minus points come from each question. Groups join with their group name; directed questions rotate through the groups in join order.
               </div>
             </>
           )}
-          {error && <div className="ds-alert bad" style={{ marginTop: 14 }}>⚠️ {error}</div>}
+          {error && <div className="ds-alert bad" style={{ marginTop: 14 }}><Icon name="alert" /> {error}</div>}
         </div>
 
         <div className="ds-modal-footer">
