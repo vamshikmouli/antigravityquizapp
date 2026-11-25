@@ -1,28 +1,11 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import Select from './common/Select';
-import './QuestionManager.css';
+import { QUESTION_TYPES, typeInfo, LETTERS } from '../lib/questionTypes';
 
-const QUESTION_TYPES = {
-  MULTIPLE_CHOICE: 'MULTIPLE_CHOICE',
-  BUZZER: 'BUZZER',
-  ORAL_BUZZER: 'ORAL_BUZZER',
-  ORAL_OPEN: 'ORAL_OPEN',
-  TRUE_FALSE: 'TRUE_FALSE',
-  SHORT_ANSWER: 'SHORT_ANSWER'
-};
+const TEXT_ANSWER_TYPES = ['SHORT_ANSWER', 'ORAL_BUZZER', 'ORAL_OPEN', 'CLUE'];
+const DEFAULT_CLUE_POINTS = [30, 20, 10, 5, 5];
 
-const TYPE_OPTIONS = [
-  { value: 'MULTIPLE_CHOICE', label: 'Poll (Multiple Choice)', icon: '📊' },
-  { value: 'BUZZER', label: 'Fastest Finger (Buzzer with Options)', icon: '⚡' },
-  { value: 'ORAL_BUZZER', label: 'Shout (Oral Buzzer)', icon: '📢' },
-  { value: 'ORAL_OPEN', label: 'Spotlight (Host Picks)', icon: '🔦' },
-  { value: 'TRUE_FALSE', label: 'True / False', icon: '⚖️' },
-  { value: 'SHORT_ANSWER', label: 'Short Answer', icon: '📝' }
-];
-
-
-function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null }) {
+function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null, defaultRound = 1 }) {
   const { token } = useAuth();
   const [formData, setFormData] = useState({
     text: editingQuestion?.text || '',
@@ -32,10 +15,12 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null }
     points: editingQuestion?.points || 100,
     negativePoints: editingQuestion?.negativePoints || 0,
     timeLimit: editingQuestion?.timeLimit || 30,
-    round: editingQuestion?.round || 1,
+    round: editingQuestion?.round || defaultRound || 1,
     imageUrl: editingQuestion?.imageUrl || '',
     optionImages: editingQuestion?.optionImages || (editingQuestion?.options?.length ? editingQuestion.options.map(() => '') : ['', '', '', '']),
     readingTime: editingQuestion?.readingTime || 0,
+    clues: editingQuestion?.clues?.length ? editingQuestion.clues : ['', '', ''],
+    cluePoints: editingQuestion?.cluePoints?.length ? editingQuestion.cluePoints : [30, 20, 10],
     quizId: editingQuestion?.quizId || quizId
   });
   const [uploading, setUploading] = useState({ question: false, options: [] });
@@ -54,6 +39,16 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null }
           type: value,
           options: ['True', 'False'],
           correctAnswer: 'True' 
+        }));
+      } else if (value === 'CLUE') {
+        setFormData(prev => ({
+          ...prev,
+          type: value,
+          options: [],
+          correctAnswer: '',
+          negativePoints: prev.negativePoints || 5,
+          clues: prev.clues?.length ? prev.clues : ['', '', ''],
+          cluePoints: prev.cluePoints?.length ? prev.cluePoints : [30, 20, 10]
         }));
       } else if (value === 'SHORT_ANSWER' || value === 'ORAL_BUZZER' || value === 'ORAL_OPEN') {
         setFormData(prev => ({ 
@@ -75,9 +70,12 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null }
   };
 
   const handleOptionChange = (index, value) => {
-    const newOptions = [...formData.options];
-    newOptions[index] = value;
-    setFormData(prev => ({ ...prev, options: newOptions }));
+    setFormData(prev => {
+      const options = [...prev.options];
+      const wasCorrect = prev.correctAnswer !== '' && prev.options[index] === prev.correctAnswer;
+      options[index] = value;
+      return { ...prev, options, correctAnswer: wasCorrect ? value : prev.correctAnswer };
+    });
   };
 
   const handleFileUpload = async (e, type, index = null) => {
@@ -132,6 +130,10 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null }
       if (formData.options.some(opt => !opt)) return setError('All options must be filled');
     }
     if (formData.type === 'SHORT_ANSWER' && !formData.correctAnswer) return setError('Correct answer is required');
+    if (formData.type === 'CLUE') {
+      if (!formData.clues.some((c) => c.trim())) return setError('Add at least one clue');
+      if (!formData.correctAnswer) return setError('The answer is required');
+    }
 
     setSaving(true);
 
@@ -148,7 +150,20 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null }
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({
+          ...formData,
+          round: Number(formData.round) || 1,
+          timeLimit: Math.max(5, Number(formData.timeLimit) || 30),
+          readingTime: Math.max(0, Number(formData.readingTime) || 0),
+          points: Math.max(0, Number(formData.points) || 0),
+          negativePoints: Math.max(0, Number(formData.negativePoints) || 0),
+          ...(formData.type === 'CLUE'
+            ? (() => {
+                const pairs = formData.clues.map((c, i) => [c.trim(), Number(formData.cluePoints[i]) || 0]).filter(([c]) => c);
+                return { clues: pairs.map(([c]) => c), cluePoints: pairs.map(([, p]) => p), points: pairs[0]?.[1] || Number(formData.points) || 0 };
+              })()
+            : { clues: [], cluePoints: [] })
+        })
       });
 
       if (!res.ok) throw new Error('Failed to save question');
@@ -162,229 +177,162 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null }
     }
   };
 
+  const t = typeInfo(formData.type);
+  const num = (field) => (e) => handleChange(field, e.target.value === '' ? '' : parseInt(e.target.value, 10));
+  const hasOptions = ['MULTIPLE_CHOICE', 'BUZZER'].includes(formData.type);
+
   return (
-    <div className="modal-overlay">
-      <div className="modal-content question-form-modal">
-        <div className="modal-header">
-          <h2>{editingQuestion ? 'Edit Question' : 'Add New Question'}</h2>
-          <button onClick={onClose} className="close-btn">×</button>
+    <div className="ds-overlay">
+      <form className={`ds-modal wide qf t-${formData.type}`} onSubmit={handleSubmit}>
+        <div className="ds-modal-header">
+          <span className="ds-type-icon">{t.icon}</span>
+          <div>
+            <h2>{editingQuestion ? 'Edit question' : 'New question'}</h2>
+            <p>{t.label} · Round {formData.round || 1}</p>
+          </div>
+          <button type="button" onClick={onClose} className="ds-close" aria-label="Close">×</button>
         </div>
-        
-        {error && <div className="error-message">{error}</div>}
-        
-        <form onSubmit={handleSubmit} className="modern-form">
-          <div className="form-section">
-            <h3 className="section-title">📝 Content</h3>
-            
-            {/* Row 1: Type and Round */}
-            <div className="form-row">
-              <div className="form-group half">
-                <Select 
-                  label="Question Type"
-                  options={TYPE_OPTIONS}
-                  value={formData.type}
-                  onChange={(val) => handleChange('type', val)}
-                />
-              </div>
 
-              
-              <div className="form-group half">
-                <label>Round Number</label>
-                <input 
-                  type="number" 
-                  min="1"
-                  value={formData.round}
-                  onChange={(e) => handleChange('round', parseInt(e.target.value))}
-                  className="modern-input"
-                />
-              </div>
-            </div>
-
-            {/* Question Text */}
-            <div className="form-group big-text">
-              <label>Question Text</label>
-              <textarea 
-                value={formData.text}
-                onChange={(e) => handleChange('text', e.target.value)}
-                rows="3"
-                placeholder="What is the capital of..."
-                className="modern-textarea"
-              />
-            </div>
-
-            {/* Question Image */}
-            <div className="form-group">
-              <label>Question Image (Optional)</label>
-              <div className="upload-container">
-                {formData.imageUrl && (
-                  <div className="preview-box">
-                    <img src={formData.imageUrl} alt="Question preview" />
-                    <button type="button" className="remove-img" onClick={() => handleChange('imageUrl', '')}>×</button>
-                  </div>
-                )}
-                <input 
-                  type="file" 
-                  accept="image/*"
-                  onChange={(e) => handleFileUpload(e, 'question')}
-                  className="file-input"
-                  id="q-image"
-                />
-                <label htmlFor="q-image" className="file-label">
-                  {uploading.question ? 'Uploading...' : '📁 Choose Image'}
-                </label>
-              </div>
+        <div className="ds-modal-body">
+          <div className="qf-section">
+            <div className="ds-label">Question type</div>
+            <div className="qf-types">
+              {QUESTION_TYPES.map((qt) => (
+                <button type="button" key={qt.value} className={`qf-type t-${qt.value} ${formData.type === qt.value ? 'active' : ''}`}
+                  onClick={() => formData.type !== qt.value && handleChange('type', qt.value)}>
+                  <span className="ds-type-icon">{qt.icon}</span>
+                  <span>{qt.label}</span>
+                </button>
+              ))}
             </div>
           </div>
 
-          <div className="form-section">
-            <h3 className="section-title">✨ Answer & Options</h3>
+          <div className="qf-section">
+            <label className="ds-field" style={{ marginBottom: 10 }}>
+              <span className="ds-label">Question</span>
+              <textarea className="ds-textarea" value={formData.text} rows={3} autoFocus={!editingQuestion}
+                onChange={(e) => handleChange('text', e.target.value)} placeholder="e.g. What is the SI unit of force?" />
+            </label>
+            <div className="ds-row">
+              {formData.imageUrl && (
+                <div className="qf-img">
+                  <img src={formData.imageUrl} alt="Question" />
+                  <button type="button" onClick={() => handleChange('imageUrl', '')} aria-label="Remove image">×</button>
+                </div>
+              )}
+              <label className="ds-btn ds-btn-sm" style={{ cursor: 'pointer' }}>
+                <input type="file" accept="image/*" hidden onChange={(e) => handleFileUpload(e, 'question')} />
+                {uploading.question ? <><span className="ds-spinner" /> Uploading…</> : <>🖼️ {formData.imageUrl ? 'Change image' : 'Add image'}</>}
+              </label>
+              <span className="ds-hint">Optional — shown on the big screen.</span>
+            </div>
+          </div>
 
-            {/* Options & Answer based on Type */}
-            {['MULTIPLE_CHOICE', 'BUZZER'].includes(formData.type) && (
-              <div className="options-grid">
-                {formData.options.map((opt, idx) => (
-                  <div key={idx} className={`option-card ${formData.correctAnswer === opt && opt !== '' ? 'correct-selected' : ''}`}>
-                    <div className="option-header">
-                      <span className="option-label">Option {String.fromCharCode(65 + idx)}</span>
-                      <input 
-                        type="radio"
-                        name="correctAnswer"
-                        checked={formData.correctAnswer === opt && opt !== ''}
-                        onChange={() => handleChange('correctAnswer', opt)}
-                        disabled={!opt}
-                        className="custom-radio"
-                      />
-                    </div>
-                    
-                    {formData.optionImages[idx] && (
-                      <div className="option-preview">
-                        <img src={formData.optionImages[idx]} alt="" />
-                        <button type="button" onClick={() => {
-                          const newImgs = [...formData.optionImages];
-                          newImgs[idx] = '';
-                          setFormData(prev => ({ ...prev, optionImages: newImgs }));
-                        }}>×</button>
-                      </div>
-                    )}
+          <div className="qf-section">
+            <div className="ds-label">{hasOptions ? 'Options — tap the circle to mark the correct one' : formData.type === 'CLUE' ? 'Clues' : 'Correct answer'}</div>
 
-                    <div className="option-controls">
-                      <input 
-                        type="text" 
-                        value={opt}
-                        onChange={(e) => handleOptionChange(idx, e.target.value)}
-                        placeholder={`Answer ${String.fromCharCode(65 + idx)}`}
-                        className="modern-input"
-                      />
-                      <label className="opt-file-btn">
-                        <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, 'option', idx)} />
-                        {uploading.options[idx] ? '...' : '🖼️'}
+            {hasOptions && (
+              <div className="qf-options">
+                {formData.options.map((opt, idx) => {
+                  const correct = formData.correctAnswer === opt && opt !== '';
+                  return (
+                    <div key={idx} className={`qf-option o${idx % 4} ${correct ? 'correct' : ''}`}>
+                      <button type="button" className="qf-mark" disabled={!opt} title="Mark as correct"
+                        aria-label={`Mark option ${LETTERS[idx]} correct`} onClick={() => handleChange('correctAnswer', opt)}>
+                        {correct ? '✓' : LETTERS[idx]}
+                      </button>
+                      {formData.optionImages[idx] && (
+                        <span className="qf-opt-img">
+                          <img src={formData.optionImages[idx]} alt="" />
+                          <button type="button" aria-label="Remove image" onClick={() => {
+                            const imgs = [...formData.optionImages]; imgs[idx] = '';
+                            setFormData((prev) => ({ ...prev, optionImages: imgs }));
+                          }}>×</button>
+                        </span>
+                      )}
+                      <input className="ds-input" type="text" value={opt} placeholder={`Option ${LETTERS[idx]}`}
+                        onChange={(e) => handleOptionChange(idx, e.target.value)} />
+                      <label className="ds-icon-btn" title="Add image" style={{ cursor: 'pointer' }}>
+                        <input type="file" accept="image/*" hidden onChange={(e) => handleFileUpload(e, 'option', idx)} />
+                        {uploading.options[idx] ? <span className="ds-spinner" /> : '🖼️'}
                       </label>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Explicit Correct Answer for Short Answer, Buzzer, or Oral types */}
-            {(formData.type === 'SHORT_ANSWER' || formData.type === 'BUZZER' || formData.type === 'ORAL_BUZZER' || formData.type === 'ORAL_OPEN') && (
-              <div className="form-group" style={{ marginTop: '20px' }}>
-                <label>Correct Answer {formData.type === 'BUZZER' ? '(Auto-filled from options)' : '(Exact Match)'}</label>
-                <input 
-                  type="text" 
-                  value={formData.correctAnswer}
-                  onChange={(e) => handleChange('correctAnswer', e.target.value)}
-                  className="modern-input"
-                  placeholder={formData.type === 'BUZZER' ? "Select an option or type here" : "e.g. Paris"}
-                />
+                  );
+                })}
               </div>
             )}
 
             {formData.type === 'TRUE_FALSE' && (
-              <div className="true-false-wrapper">
-                {['True', 'False'].map(val => (
-                  <div 
-                    key={val} 
-                    className={`tf-card ${formData.correctAnswer === val ? 'selected' : ''}`}
-                    onClick={() => handleChange('correctAnswer', val)}
-                  >
-                    <div className="tf-icon">{val === 'True' ? '✅' : '❌'}</div>
-                    <span>{val}</span>
-                  </div>
+              <div className="qf-tf">
+                {['True', 'False'].map((val) => (
+                  <button type="button" key={val} className={`qf-tf-card ${val === 'True' ? 'yes' : 'no'} ${formData.correctAnswer === val ? 'active' : ''}`}
+                    onClick={() => handleChange('correctAnswer', val)}>
+                    <span>{val === 'True' ? '✅' : '❌'}</span>{val}
+                  </button>
                 ))}
               </div>
             )}
 
-            {formData.type === 'SHORT_ANSWER' && (
-              <div className="form-group">
-                <label>Correct Answer (Exact Match)</label>
-                <input 
-                  type="text" 
-                  value={formData.correctAnswer}
-                  onChange={(e) => handleChange('correctAnswer', e.target.value)}
-                  className="modern-input"
-                  placeholder="e.g. Paris"
-                />
+            {formData.type === 'CLUE' && (
+              <div className="qf-clues">
+                {formData.clues.map((clue, i) => (
+                  <div key={i} className="qf-clue">
+                    <span className="qf-clue-n">{i + 1}</span>
+                    <input className="ds-input" type="text" value={clue} placeholder={`Clue ${i + 1}${i === 0 ? ' (hardest)' : ''}`}
+                      onChange={(e) => setFormData((prev) => { const clues = [...prev.clues]; clues[i] = e.target.value; return { ...prev, clues }; })} />
+                    <label className="qf-clue-pts" title="Points if answered after this clue">
+                      <input className="ds-input" type="number" min="0" value={formData.cluePoints[i] ?? ''}
+                        onChange={(e) => setFormData((prev) => { const cluePoints = [...prev.cluePoints]; cluePoints[i] = e.target.value === '' ? '' : Number(e.target.value); return { ...prev, cluePoints }; })} />
+                      <em>pts</em>
+                    </label>
+                    {formData.clues.length > 1 && (
+                      <button type="button" className="ds-icon-btn danger" aria-label="Remove clue"
+                        onClick={() => setFormData((prev) => ({ ...prev, clues: prev.clues.filter((_, j) => j !== i), cluePoints: prev.cluePoints.filter((_, j) => j !== i) }))}>×</button>
+                    )}
+                  </div>
+                ))}
+                {formData.clues.length < 5 && (
+                  <button type="button" className="ds-btn ds-btn-sm" style={{ justifySelf: 'start' }}
+                    onClick={() => setFormData((prev) => ({ ...prev, clues: [...prev.clues, ''], cluePoints: [...prev.cluePoints, DEFAULT_CLUE_POINTS[prev.clues.length] ?? 5] }))}>＋ Add clue</button>
+                )}
+                <div className="ds-hint">Clues are revealed one by one; groups buzz in. Fewer clues = more points.</div>
+                <div className="ds-label" style={{ marginTop: 10 }}>Answer</div>
               </div>
+            )}
+
+            {TEXT_ANSWER_TYPES.includes(formData.type) && (
+              <>
+                <input className="ds-input" type="text" value={formData.correctAnswer}
+                  onChange={(e) => handleChange('correctAnswer', e.target.value)}
+                  placeholder={formData.type === 'SHORT_ANSWER' ? 'e.g. Mitochondria (exact match)' : formData.type === 'CLUE' ? 'e.g. Kuvempu' : 'Model answer for the host (optional)'} />
+                <div className="ds-hint" style={{ marginTop: 6 }}>
+                  {formData.type === 'SHORT_ANSWER' ? 'Students must type this answer (spacing and capitals are ignored in group competitions).' : 'Shown to the host to judge spoken answers.'}
+                </div>
+              </>
             )}
           </div>
 
-          <div className="form-section">
-            <h3 className="section-title">⚙️ Settings</h3>
-            {/* Row 2: Settings */}
-            <div className="form-row">
-              <div className="form-group third">
-                <label>Time Limit (s)</label>
-                <input 
-                  type="number" 
-                  min="5"
-                  value={formData.timeLimit}
-                  onChange={(e) => handleChange('timeLimit', parseInt(e.target.value))}
-                  className="modern-input"
-                />
-              </div>
-              
-              <div className="form-group third">
-                <label>Points</label>
-                <input 
-                  type="number" 
-                  value={formData.points}
-                  onChange={(e) => handleChange('points', parseInt(e.target.value))}
-                  className="modern-input"
-                />
-              </div>
-
-              <div className="form-group third">
-                <label>Neg. Points (<span style={{color:'#ff6b6b'}}>-</span>)</label>
-                <input 
-                  type="number" 
-                  value={formData.negativePoints}
-                  onChange={(e) => handleChange('negativePoints', parseInt(e.target.value))}
-                  className="modern-input"
-                />
-              </div>
-
-              <div className="form-group third">
-                <label>Reading Time (s)</label>
-                <input 
-                  type="number" 
-                  min="0"
-                  value={formData.readingTime}
-                  onChange={(e) => handleChange('readingTime', parseInt(e.target.value))}
-                  className="modern-input"
-                  placeholder="Buzzer delay"
-                />
-              </div>
+          <div className="qf-section" style={{ marginBottom: 0 }}>
+            <div className="ds-label">Round, timing & scoring</div>
+            <div className="qf-settings">
+              <label className="qf-num"><span>Round</span><input className="ds-input" type="number" min="1" value={formData.round} onChange={num('round')} /></label>
+              <label className="qf-num"><span>Time limit</span><div><input className="ds-input" type="number" min="5" value={formData.timeLimit} onChange={num('timeLimit')} /><em>s</em></div></label>
+              <label className="qf-num"><span>Reading time</span><div><input className="ds-input" type="number" min="0" value={formData.readingTime} onChange={num('readingTime')} /><em>s</em></div></label>
+              <label className="qf-num plus"><span>Points</span><input className="ds-input" type="number" min="0" value={formData.points} onChange={num('points')} /></label>
+              <label className="qf-num minus"><span>Minus if wrong</span><input className="ds-input" type="number" min="0" value={formData.negativePoints} onChange={num('negativePoints')} /></label>
             </div>
           </div>
 
-          <div className="modal-actions">
-            <button type="button" onClick={onClose} className="cancel-btn">Cancel</button>
-            <button type="submit" disabled={saving} className="primary-btn save-btn">
-              {saving ? 'Saving...' : 'Save Question'}
-            </button>
-          </div>
-        </form>
-      </div>
+          {error && <div className="ds-alert bad" style={{ marginTop: 16 }}>⚠️ {error}</div>}
+        </div>
+
+        <div className="ds-modal-footer">
+          <button type="button" onClick={onClose} className="ds-btn ds-btn-ghost">Cancel</button>
+          <button type="submit" disabled={saving} className="ds-btn ds-btn-primary">
+            {saving ? 'Saving…' : editingQuestion ? 'Save changes' : 'Add question'}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

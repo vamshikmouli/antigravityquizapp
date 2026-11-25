@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import './JoinScreen.css'
 
 function JoinScreen({ socket, onJoinSuccess }) {
   const [code, setCode] = useState('')
@@ -71,68 +70,31 @@ function JoinScreen({ socket, onJoinSuccess }) {
   }
   
   return (
-    <div className="join-screen fade-in">
-      <div className="join-header">
-        <div className="quiz-icon">🎯</div>
-        <h1>Quiz Time!</h1>
-        <p className="subtitle">Enter the code to join the quiz</p>
+    <div className="ph-page ph-join">
+      <div className="ph-hero">
+        <span className="ds-brand-icon ph-logo">🎯</span>
+        <h1>Ready to <span className="ds-grad-text">play?</span></h1>
+        <p className="ds-dim">Enter the code on the big screen and your name.</p>
       </div>
-      
-      <form onSubmit={handleSubmit} className="join-form">
-        <div className="form-group">
-          <label htmlFor="code">Quiz Code</label>
-          <input
-            id="code"
-            type="text"
-            placeholder="ABC-123"
-            value={code}
-            onChange={handleCodeChange}
-            maxLength={7}
-            disabled={loading}
-            autoComplete="off"
-            className="code-input"
-          />
-        </div>
-        
-        <div className="form-group">
-          <label htmlFor="name">Your Name</label>
-          <input
-            id="name"
-            type="text"
-            placeholder="Enter your name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            maxLength={30}
-            disabled={loading}
-            autoComplete="name"
-          />
-        </div>
-        
-        {error && (
-          <div className="error-message">
-            {error}
-          </div>
-        )}
-        
-        <button 
-          type="submit" 
-          className="btn-primary join-button"
-          disabled={loading || !code || !name}
-        >
-          {loading ? (
-            <div className="flex items-center justify-center gap-md">
-              <div className="spinner"></div>
-              <span>Joining...</span>
-            </div>
-          ) : (
-            'Join Quiz'
-          )}
+
+      <form onSubmit={handleSubmit} className="ph-card">
+        <label className="ds-field">
+          <span className="ds-label">Quiz code</span>
+          <input id="code" type="text" inputMode="text" placeholder="ABC-123" value={code} onChange={handleCodeChange}
+            maxLength={7} disabled={loading} autoComplete="off" autoCapitalize="characters" className="ds-code-input ph-code" />
+        </label>
+        <label className="ds-field">
+          <span className="ds-label">Your name</span>
+          <input id="name" type="text" placeholder="e.g. Priya" value={name} onChange={(e) => setName(e.target.value)}
+            maxLength={30} disabled={loading} autoComplete="name" className="ds-input ph-input" />
+        </label>
+        {error && <div className="ds-alert bad" style={{ marginBottom: 14 }}>⚠️ {error}</div>}
+        <button type="submit" className="ds-btn ds-btn-primary ds-btn-lg ds-btn-block ph-big-btn" disabled={loading || !code || !name}>
+          {loading ? <><span className="ds-spinner" /> Joining…</> : 'Join quiz →'}
         </button>
       </form>
-      
-      <div className="join-footer">
-        <p>Ask your teacher for the quiz code</p>
-      </div>
+
+      <p className="ph-foot">Ask your teacher for the code</p>
     </div>
   )
 }

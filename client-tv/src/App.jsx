@@ -238,7 +238,7 @@ function AppContent() {
   return (
     <div className="tv-container">
        {/* Connection & Theme Status */}
-       <div style={{
+       <div className="tv-status-pill" style={{
           position: 'fixed',
           top: '20px',
           right: '20px',

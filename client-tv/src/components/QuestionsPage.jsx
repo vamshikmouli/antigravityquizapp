@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import QuestionForm from './QuestionForm';
-import Select from './common/Select';
+import AIGenerateModal from './AIGenerateModal';
+import CompetitionSetup from './CompetitionSetup';
 import { useParams, Link } from 'react-router-dom';
-import './QuestionManager.css';
+import { QUESTION_TYPES, typeInfo, LETTERS } from '../lib/questionTypes';
 
 function QuestionsPage() {
   const { quizId } = useParams();
@@ -24,6 +25,8 @@ function QuestionsPage() {
   const [selectedSourceQuiz, setSelectedSourceQuiz] = useState(null);
   const [loadingQuizzes, setLoadingQuizzes] = useState(false);
   const [showKebabMenu, setShowKebabMenu] = useState(false);
+  const [showAIModal, setShowAIModal] = useState(false);
+  const [showSetup, setShowSetup] = useState(false);
   const kebabRef = useRef(null);
 
   const fetchQuizData = async () => {
@@ -162,208 +165,231 @@ function QuestionsPage() {
     }
   };
 
-  const rounds = ['All', ...new Set(questions.map(q => q.round))].sort((a,b) => a - b);
-  
-  const filteredQuestions = questions.filter(q => {
-    const roundMatch = selectedRound === 'All' || q.round === selectedRound;
-    const typeMatch = selectedType === 'All' || q.type === selectedType;
-    return roundMatch && typeMatch;
-  });
+  const rounds = [...new Set(questions.map((q) => q.round))].sort((a, b) => a - b);
+  const typesPresent = QUESTION_TYPES.filter((t) => questions.some((q) => q.type === t.value));
+
+  const filteredQuestions = questions
+    .filter((q) => (selectedRound === 'All' || q.round === selectedRound) && (selectedType === 'All' || q.type === selectedType))
+    .sort((a, b) => (a.round - b.round) || (new Date(a.createdAt) - new Date(b.createdAt)));
+  const groups = [...new Set(filteredQuestions.map((q) => q.round))].map((r) => ({
+    round: r,
+    items: filteredQuestions.filter((q) => q.round === r)
+  }));
+  const totalPoints = questions.reduce((s, q) => s + (q.points || 0), 0);
+  const openAdd = () => { setEditingQuestion(null); setShowForm(true); };
+  const isTeams = quiz?.mode === 'TEAMS';
+  const roundInfo = (r) => (Array.isArray(quiz?.roundSettings) ? quiz.roundSettings.find((x) => x.round === r) : null);
+  const FORMAT_LABEL = { DIRECTED: 'Directed', ALL: 'Everyone answers', BUZZER: 'Buzzer', CLUE: 'Clue round' };
 
   return (
-    <div className="dashboard-container">
-      <header className="dashboard-header">
-        <div className="header-info" style={{ display: 'flex', alignItems: 'center' }}>
-          <Link to="/quizzes" className="top-left-back-btn">← Back</Link>
-          <h1 style={{ marginBottom: '8px' }}>{quiz?.title || 'Quiz Details'}</h1>
+    <div className="ds-page">
+      <header className="ds-topbar">
+        <Link to="/quizzes" className="ds-back" aria-label="Back">←</Link>
+        <div className="ds-topbar-title">
+          <small>Quiz</small>
+          <h1>{quiz?.title || 'Loading…'}</h1>
         </div>
-        <div className="header-actions">
-          <div className="kebab-menu-container" ref={kebabRef}>
-            <button 
-              className="kebab-btn" 
-              onClick={() => setShowKebabMenu(!showKebabMenu)}
-              title="More Actions"
-            >
-              ⋮
-            </button>
-            
+        <div className="ds-topbar-actions">
+          <button type="button" className={`ds-btn ds-hide-sm ${isTeams ? 'cs-on' : ''}`} onClick={() => setShowSetup(true)} title="Competition setup">🏆 {isTeams ? 'Groups' : 'Competition'}</button>
+          <button type="button" className="ds-btn ds-hide-sm" onClick={openAdd}>＋ Add question</button>
+          <button type="button" className="ds-btn ds-btn-primary" onClick={() => setShowAIModal(true)}>✨ <span className="ds-hide-sm">Generate with </span>AI</button>
+          <div className="ds-menu-wrap" ref={kebabRef}>
+            <button type="button" className="ds-icon-btn" aria-label="More Actions" title="More actions"
+              style={{ border: '1px solid var(--ds-border-2)', width: 42, height: 42 }}
+              onClick={() => setShowKebabMenu(!showKebabMenu)}>⋯</button>
             {showKebabMenu && (
-              <div className="kebab-dropdown fade-in">
-                <button 
-                  onClick={() => { setEditingQuestion(null); setShowForm(true); setShowKebabMenu(false); }} 
-                  className="dropdown-item"
-                >
-                  <span>➕</span> Add Question
+              <div className="ds-menu">
+                <button type="button" onClick={() => { openAdd(); setShowKebabMenu(false); }}>
+                  <span>➕</span><div>Add question<small>Write one by hand</small></div>
                 </button>
-                
-                <button 
-                  onClick={() => { fetchAvailableQuizzes(); setShowImportModal(true); setShowKebabMenu(false); }} 
-                  className="dropdown-item"
-                >
-                  <span>🔗</span> Import from Quiz
+                <button type="button" onClick={() => { setShowAIModal(true); setShowKebabMenu(false); }}>
+                  <span>✨</span><div>Generate with AI<small>Plan rounds from a prompt</small></div>
                 </button>
-                
-                <div className="dropdown-divider"></div>
-                
-                <a href="/templates/sample_questions.xlsx" download className="dropdown-item" onClick={() => setShowKebabMenu(false)}>
-                  <span>📥</span> Sample Template
+                <button type="button" onClick={() => { setShowSetup(true); setShowKebabMenu(false); }}>
+                  <span>🏆</span><div>Competition setup<small>Groups, round formats, elimination</small></div>
+                </button>
+                <button type="button" onClick={() => { fetchAvailableQuizzes(); setShowImportModal(true); setShowKebabMenu(false); }}>
+                  <span>🔗</span><div>Import from a quiz<small>Copy questions you already have</small></div>
+                </button>
+                <button type="button" disabled={importing} onClick={() => { fileInputRef.current?.click(); setShowKebabMenu(false); }}>
+                  <span>📁</span><div>{importing ? 'Importing…' : 'Bulk import'}<small>Excel or CSV file</small></div>
+                </button>
+                <a href="/templates/group_competition_template.xlsx" download onClick={() => setShowKebabMenu(false)}>
+                  <span>🏆</span><div>Group quiz template<small>5 rounds: general, visual, rapid fire, buzzer, clue</small></div>
                 </a>
-                
-                <button 
-                  onClick={() => { fileInputRef.current?.click(); setShowKebabMenu(false); }} 
-                  className="dropdown-item"
-                  disabled={importing}
-                >
-                  <span>📁</span> {importing ? 'Importing...' : 'Bulk Import'}
-                </button>
+                <a href="/templates/sample_questions.xlsx" download onClick={() => setShowKebabMenu(false)}>
+                  <span>📥</span><div>Download template<small>Sample spreadsheet</small></div>
+                </a>
               </div>
             )}
           </div>
-          
-          <input 
-            type="file" 
-            ref={fileInputRef} 
-            onChange={handleImport} 
-            style={{ display: 'none' }}
-            accept=".xlsx,.xls,.csv"
-          />
+          <input type="file" ref={fileInputRef} onChange={handleImport} style={{ display: 'none' }} accept=".xlsx,.xls,.csv" />
         </div>
       </header>
 
-      <div className="filters" style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '25px' }}>
-        <Select 
-          label="Filter by Round"
-          options={rounds.map(r => ({
-            value: r,
-            label: r === 'All' ? 'All Rounds' : `Round ${r}`,
-            icon: r === 'All' ? '🌐' : '🎯'
-          }))}
-          value={selectedRound}
-          onChange={(val) => setSelectedRound(val === 'All' ? 'All' : parseInt(val))}
-          small
-        />
-
-        <Select 
-          label="Filter by Type"
-          options={[
-            { value: 'All', label: 'All Types', icon: '📁' },
-            { value: 'MULTIPLE_CHOICE', label: 'Poll', icon: '📊' },
-            { value: 'BUZZER', label: 'Buzzer', icon: '⚡' },
-            { value: 'ORAL_BUZZER', label: 'Shout', icon: '📢' },
-            { value: 'ORAL_OPEN', label: 'Spotlight', icon: '🔦' },
-            { value: 'TRUE_FALSE', label: 'True/False', icon: '⚖️' },
-            { value: 'SHORT_ANSWER', label: 'Short Answer', icon: '📝' }
-          ]}
-          value={selectedType}
-          onChange={(val) => setSelectedType(val)}
-          small
-        />
-      </div>
-
-
-      {loading ? <div className="spinner"></div> : (
-        <div className="questions-list">
-          {filteredQuestions.length === 0 ? (
-            <p className="no-data">No questions found. Add some!</p>
-          ) : (
-            filteredQuestions.map(q => (
-              <div key={q.id} className="question-item bounce-in">
-                <div className="q-info">
-                  <div className="q-primary-row">
-                    {q.imageUrl && (
-                      <div className="q-thumbnail">
-                        <img src={q.imageUrl} alt="" />
-                      </div>
-                    )}
-                    <div className="q-text-content">
-                      <span className="q-badge">{q.type}</span>
-                      <span className="q-round">Round {q.round}</span>
-                      <h3>{q.text}</h3>
-                      <p className="q-details">{q.timeLimit}s | {q.points}pts</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="q-actions">
-                  <button onClick={() => { setEditingQuestion(q); setShowForm(true); }}>Edit</button>
-                  <button onClick={() => handleDelete(q.id)} className="delete-btn">Delete</button>
-                </div>
+      {!loading && questions.length > 0 && (
+        <>
+          <div className="ds-row" style={{ marginBottom: 12 }}>
+            <span className="ds-chip accent">{questions.length} questions</span>
+            <span className="ds-chip">{rounds.length} round{rounds.length === 1 ? '' : 's'}</span>
+            <span className="ds-chip good">{totalPoints} points</span>
+            {isTeams && <button type="button" className="ds-chip accent" style={{ border: 'none', cursor: 'pointer' }} onClick={() => setShowSetup(true)}>👥 Group competition</button>}
+            {quiz?.description && <span className="ds-muted" style={{ marginLeft: 6 }}>{quiz.description}</span>}
+          </div>
+          <div className="ds-row" style={{ marginBottom: 22, gap: 12 }}>
+            <div className="ds-tabs" role="tablist" aria-label="Filter by round">
+              <button type="button" className={selectedRound === 'All' ? 'active' : ''} onClick={() => setSelectedRound('All')}>All rounds</button>
+              {rounds.map((r) => (
+                <button type="button" key={r} className={selectedRound === r ? 'active' : ''} onClick={() => setSelectedRound(r)}>Round {r}</button>
+              ))}
+            </div>
+            {typesPresent.length > 1 && (
+              <div className="ds-tabs" role="tablist" aria-label="Filter by type">
+                <button type="button" className={selectedType === 'All' ? 'active' : ''} onClick={() => setSelectedType('All')}>All types</button>
+                {typesPresent.map((t) => (
+                  <button type="button" key={t.value} className={selectedType === t.value ? 'active' : ''} onClick={() => setSelectedType(t.value)}>{t.icon} {t.short}</button>
+                ))}
               </div>
-            ))
-          )}
+            )}
+          </div>
+        </>
+      )}
+
+      {loading && <div style={{ display: 'grid', gap: 10 }}>{[0, 1, 2, 3].map((k) => <div key={k} className="ds-skeleton" style={{ height: 84 }} />)}</div>}
+
+      {!loading && questions.length === 0 && (
+        <div className="ds-empty">
+          <span className="ds-tile lg grad">✨</span>
+          <h3>This quiz is empty</h3>
+          <p>Describe the quiz you want and AI will plan the rounds and write the questions — or add them yourself.</p>
+          <div className="ds-row" style={{ justifyContent: 'center' }}>
+            <button type="button" className="ds-btn" onClick={openAdd}>＋ Add question</button>
+            <button type="button" className="ds-btn ds-btn-primary" onClick={() => setShowAIModal(true)}>✨ Generate with AI</button>
+          </div>
         </div>
       )}
 
-      {/* Import from Quiz Modal */}
-      {showImportModal && (
-        <div className="modal-overlay">
-          <div className="modal-content question-form-modal">
-            <div className="modal-header">
-              <h2>🔗 Import Questions from Another Quiz</h2>
-              <button 
-                className="close-btn" 
-                onClick={() => { setShowImportModal(false); setSelectedSourceQuiz(null); }}
-              >
-                &times;
-              </button>
-            </div>
-            
-            <div className="modern-form">
-              <p style={{ color: 'var(--text-muted)', marginBottom: '20px' }}>
-                Select one of your existing quizzes to copy all its questions into this quiz.
-              </p>
+      {!loading && questions.length > 0 && filteredQuestions.length === 0 && (
+        <div className="ds-empty"><h3>No questions match these filters</h3>
+          <button type="button" className="ds-link" onClick={() => { setSelectedRound('All'); setSelectedType('All'); }}>Show all</button></div>
+      )}
 
-              {loadingQuizzes ? (
-                <div className="spinner"></div>
-              ) : (
-                <div className="quiz-import-list">
-                  {availableQuizzes.length === 0 ? (
-                    <p style={{ textAlign: 'center', padding: '40px' }}>No other quizzes found.</p>
-                  ) : (
-                    availableQuizzes.map(qz => (
-                      <div 
-                        key={qz.id} 
-                        className={`quiz-import-item ${selectedSourceQuiz?.id === qz.id ? 'selected' : ''}`}
-                        onClick={() => setSelectedSourceQuiz(qz)}
-                      >
-                        <div className="import-quiz-info">
-                          <h4>{qz.title}</h4>
-                          <p>{qz.description || 'No description'}</p>
-                        </div>
-                        <div className="import-question-count">
-                          {qz._count.questions} Questions
-                        </div>
-                      </div>
-                    ))
-                  )}
+      {groups.map((g) => (
+        <section key={g.round} style={{ marginBottom: 22 }}>
+          <div className="ds-section-title" style={{ marginTop: 6 }}>
+            <h2>Round {g.round}{isTeams && roundInfo(g.round)?.name && roundInfo(g.round).name !== `Round ${g.round}` ? ` · ${roundInfo(g.round).name}` : ''}</h2>
+            <span>{g.items.length} question{g.items.length === 1 ? '' : 's'} · {g.items.reduce((s, q) => s + (q.points || 0), 0)} pts</span>
+            {isTeams && roundInfo(g.round) && (
+              <span className="ds-row" style={{ gap: 6 }}>
+                <span className="ds-chip accent">{FORMAT_LABEL[roundInfo(g.round).format] || roundInfo(g.round).format}</span>
+                {roundInfo(g.round).format === 'DIRECTED' && <span className="ds-chip">{roundInfo(g.round).passOnWrong === false ? 'no pass' : `pass ${roundInfo(g.round).passPercent ?? 50}%`}</span>}
+                {roundInfo(g.round).eliminate > 0 && <span className="ds-chip bad">eliminate {roundInfo(g.round).eliminate}</span>}
+              </span>
+            )}
+          </div>
+          <div style={{ display: 'grid', gap: 10 }}>
+            {g.items.map((q, i) => {
+              const t = typeInfo(q.type);
+              return (
+                <div key={q.id} className={`ds-card q-row t-${q.type}`}>
+                  {q.imageUrl
+                    ? <img src={q.imageUrl} alt="" className="q-row-thumb" />
+                    : <span className="ds-type-icon" title={t.label}>{t.icon}</span>}
+                  <div className="q-row-main">
+                    <div className="q-row-meta">
+                      <span className="ds-chip type">{t.short}</span>
+                      <span className="ds-chip">⏱ {q.timeLimit}s</span>
+                      {q.readingTime > 0 && <span className="ds-chip">📖 {q.readingTime}s</span>}
+                      <span className="ds-chip good">+{q.points}</span>
+                      {q.negativePoints > 0 && <span className="ds-chip bad">−{q.negativePoints}</span>}
+                      {q.category && <span className="ds-muted" style={{ fontSize: 12 }}>{q.category}</span>}
+                    </div>
+                    <h3 className="q-row-text"><span className="ds-muted">{i + 1}.</span> {q.text}</h3>
+                    <div className="q-row-opts">
+                      {q.type === 'CLUE' && q.clues?.length > 0
+                        ? <>
+                            {q.clues.map((c, ci) => <span key={ci} className="ds-chip"><b style={{ color: 'var(--ds-accent-text)' }}>{ci + 1}</b>&nbsp;{c}{q.cluePoints?.[ci] != null && <span className="ds-muted">&nbsp;· {q.cluePoints[ci]}</span>}</span>)}
+                            <span className="ds-chip good">✓ {q.correctAnswer}</span>
+                          </>
+                        : q.options?.length > 0
+                        ? q.options.map((o, oi) => (
+                            <span key={oi} className={`ds-opt o${oi % 4} ${o === q.correctAnswer ? 'correct' : ''}`}>
+                              <i>{LETTERS[oi]}</i>{o}{o === q.correctAnswer ? ' ✓' : ''}
+                            </span>
+                          ))
+                        : q.correctAnswer && <span className="ds-chip good">✓ {q.correctAnswer}</span>}
+                    </div>
+                  </div>
+                  <div className="q-row-actions">
+                    <button type="button" className="ds-icon-btn" title="Edit" aria-label="Edit question" onClick={() => { setEditingQuestion(q); setShowForm(true); }}>✏️</button>
+                    <button type="button" className="ds-icon-btn danger" title="Delete" aria-label="Delete question" onClick={() => handleDelete(q.id)}>🗑️</button>
+                  </div>
                 </div>
-              )}
+              );
+            })}
+          </div>
+        </section>
+      ))}
 
-              <div className="modal-actions">
-                <button 
-                  className="cancel-btn" 
-                  onClick={() => { setShowImportModal(false); setSelectedSourceQuiz(null); }}
-                >
-                  Cancel
-                </button>
-                <button 
-                  className="save-btn" 
-                  disabled={!selectedSourceQuiz || importing}
-                  onClick={handleImportFromQuiz}
-                >
-                  {importing ? 'Importing...' : 'Confirm Import'}
-                </button>
+      {showImportModal && (
+        <div className="ds-overlay">
+          <div className="ds-modal">
+            <div className="ds-modal-header">
+              <span className="ds-tile">🔗</span>
+              <div>
+                <h2>Import from another quiz</h2>
+                <p>Copy every question from one of your quizzes into this one.</p>
               </div>
+              <button type="button" className="ds-close" aria-label="Close" onClick={() => { setShowImportModal(false); setSelectedSourceQuiz(null); }}>×</button>
+            </div>
+            <div className="ds-modal-body" style={{ display: 'grid', gap: 10 }}>
+              {loadingQuizzes && <div className="ds-skeleton" style={{ height: 64 }} />}
+              {!loadingQuizzes && availableQuizzes.length === 0 && <p className="ds-muted" style={{ textAlign: 'center', padding: 30 }}>No other quizzes found.</p>}
+              {!loadingQuizzes && availableQuizzes.map((qz) => (
+                <button type="button" key={qz.id} onClick={() => setSelectedSourceQuiz(qz)}
+                  className="ds-card" style={{ textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, font: 'inherit', color: 'inherit',
+                    borderColor: selectedSourceQuiz?.id === qz.id ? 'var(--ds-accent)' : undefined,
+                    background: selectedSourceQuiz?.id === qz.id ? 'var(--ds-accent-soft)' : undefined }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <h3 style={{ fontSize: 15 }}>{qz.title}</h3>
+                    <p>{qz.description || 'No description'}</p>
+                  </div>
+                  <span className="ds-chip accent">{qz._count?.questions || 0} questions</span>
+                </button>
+              ))}
+            </div>
+            <div className="ds-modal-footer">
+              <button type="button" className="ds-btn ds-btn-ghost" onClick={() => { setShowImportModal(false); setSelectedSourceQuiz(null); }}>Cancel</button>
+              <button type="button" className="ds-btn ds-btn-primary" disabled={!selectedSourceQuiz || importing} onClick={handleImportFromQuiz}>
+                {importing ? 'Importing…' : 'Import questions'}
+              </button>
             </div>
           </div>
         </div>
       )}
 
       {showForm && (
-        <QuestionForm 
-          onClose={() => setShowForm(false)} 
+        <QuestionForm
+          onClose={() => setShowForm(false)}
           onSave={fetchQuizData}
           editingQuestion={editingQuestion}
           quizId={quizId}
+          defaultRound={selectedRound === 'All' ? (rounds[rounds.length - 1] || 1) : selectedRound}
+        />
+      )}
+
+      {showSetup && quiz && (
+        <CompetitionSetup quiz={quiz} questions={questions} token={token}
+          onClose={() => setShowSetup(false)}
+          onSaved={(d) => setQuiz((prev) => ({ ...prev, mode: d.mode, roundSettings: d.roundSettings }))} />
+      )}
+
+      {showAIModal && (
+        <AIGenerateModal
+          quizId={quizId}
+          startRound={questions.length ? Math.max(...questions.map((q) => Number(q.round) || 1)) + 1 : 1}
+          onClose={() => setShowAIModal(false)}
+          onSaved={fetchQuizData}
         />
       )}
     </div>

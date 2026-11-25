@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import GoogleSignInButton from './GoogleSignInButton';
-import './Auth.css';
+import AuthLayout from './AuthLayout';
 
 function RegisterScreen() {
   const [name, setName] = useState('');
@@ -29,56 +29,27 @@ function RegisterScreen() {
   };
 
   return (
-    <div className="auth-container fade-in">
-      <div className="auth-card">
-        <h1>Create Account</h1>
-        <p className="subtitle">Join as a Quiz Host</p>
-
-        {error && <div className="error-message">{error}</div>}
-
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label>Full Name</label>
-            <input 
-              type="text" 
-              value={name} 
-              onChange={(e) => setName(e.target.value)} 
-              required 
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Email</label>
-            <input 
-              type="email" 
-              value={email} 
-              onChange={(e) => setEmail(e.target.value)} 
-              required 
-            />
-          </div>
-          
-          <div className="form-group">
-            <label>Password</label>
-            <input 
-              type="password" 
-              value={password} 
-              onChange={(e) => setPassword(e.target.value)} 
-              required 
-            />
-          </div>
-
-          <button type="submit" disabled={isLoading} className="primary-btn">
-            {isLoading ? 'Creating Account...' : 'Register'}
-          </button>
-        </form>
-
-        <GoogleSignInButton onError={setError} />
-
-        <div className="auth-footer">
-          Already have an account? <Link to="/login">Login</Link>
-        </div>
-      </div>
-    </div>
+    <AuthLayout title="Create your account" subtitle="Free for teachers and quiz hosts." footer={<>Already have an account? <Link to="/login" className="ds-link">Sign in</Link></>}>
+      {error && <div className="ds-alert bad" style={{ marginBottom: 16 }}>⚠️ {error}</div>}
+      <form onSubmit={handleSubmit}>
+        <label className="ds-field">
+          <span className="ds-label">Full name</span>
+          <input className="ds-input" type="text" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" placeholder="e.g. Priya Sharma" required />
+        </label>
+        <label className="ds-field">
+          <span className="ds-label">Email</span>
+          <input className="ds-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" placeholder="you@school.edu" required />
+        </label>
+        <label className="ds-field">
+          <span className="ds-label">Password</span>
+          <input className="ds-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" placeholder="At least 8 characters" required />
+        </label>
+        <button type="submit" disabled={isLoading} className="ds-btn ds-btn-primary ds-btn-lg ds-btn-block" style={{ marginTop: 6 }}>
+          {isLoading ? 'Creating account…' : 'Create account'}
+        </button>
+      </form>
+      <GoogleSignInButton onError={setError} />
+    </AuthLayout>
   );
 }
 

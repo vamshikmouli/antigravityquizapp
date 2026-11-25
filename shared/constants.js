@@ -5,7 +5,8 @@ export const QUESTION_TYPES = {
   ORAL_BUZZER: 'ORAL_BUZZER',
   ORAL_OPEN: 'ORAL_OPEN',
   TRUE_FALSE: 'TRUE_FALSE',
-  SHORT_ANSWER: 'SHORT_ANSWER'
+  SHORT_ANSWER: 'SHORT_ANSWER',
+  CLUE: 'CLUE'
 };
 
 // Session Status
@@ -49,7 +50,21 @@ export const SOCKET_EVENTS = {
   BUZZER_WINNER: 'buzzer-winner',
   BUZZER_LOCKED: 'buzzer-locked',
   BUZZER_TIMEOUT: 'buzzer-timeout',
-  
+  BUZZER_ARMED: 'buzzer-armed',           // "get ready" — tapping now is a false start
+  BUZZER_FALSE_START: 'buzzer-false-start', // sent to a player who jumped early / was too fast
+  BUZZER_OVERRIDE: 'buzzer-override',     // host re-awards the buzz to another presser
+  LATENCY_PING: 'latency-ping',           // server-initiated RTT probe (client just acks)
+
+  // Competition (team) mode
+  TURN_PASSED: 'turn-passed',             // directed question moved to the next group
+  TURN_RESULT: 'turn-result',             // a group's attempt was marked
+  MARK_TURN: 'mark-turn',                 // host marks the current turn / clue buzz
+  REVEAL_CLUE: 'reveal-clue',             // host reveals the next clue
+  CLUE_REVEALED: 'clue-revealed',
+  CLUE_REOPENED: 'clue-reopened',         // wrong clue answer: buzzer reopens for the rest
+  ELIMINATE_GROUP: 'eliminate-group',     // host confirms elimination
+  GROUP_ELIMINATED: 'group-eliminated',
+
   // Answers
   SUBMIT_ANSWER: 'submit-answer',
   ANSWER_RECEIVED: 'answer-received',

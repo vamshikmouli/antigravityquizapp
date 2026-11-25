@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import './LobbyScreen.css'
 
 function LobbyScreen({ socket, participantData, onExit }) {
   const [participants, setParticipants] = useState([])
@@ -29,55 +28,34 @@ function LobbyScreen({ socket, participantData, onExit }) {
     }
   }, [socket])
   
+  const COLORS = ['#818cf8', '#f472b6', '#34d399', '#fbbf24', '#38bdf8', '#c084fc', '#fb923c']
+  const me = participantData?.name || 'You'
+
   return (
-    <div className="lobby-screen fade-in">
-      <div className="lobby-header">
-        <h1>Waiting for Quiz to Start...</h1>
-        <div className="header-actions">
-          <p className="participant-name">Welcome, {participantData?.name}!</p>
-          <button className="exit-quiz-btn" onClick={onExit} title="Leave Quiz">
-            Exit Quiz 🚪
-          </button>
+    <div className="ph-page ph-lobby">
+      <div className="ph-hero">
+        <div className="ph-me" style={{ '--c': '#a855f7' }}>{me.charAt(0).toUpperCase()}<span>✓</span></div>
+        <h1>You’re in, <span className="ds-grad-text">{me}!</span></h1>
+        <p className="ds-dim">Watch the big screen — the quiz starts soon.</p>
+        <div className="ph-waiting"><span className="gm-dots"><i /><i /><i /></span> Waiting for the host</div>
+      </div>
+
+      <div className="ph-card">
+        <div className="ds-row" style={{ marginBottom: 12 }}>
+          <strong style={{ fontSize: 15 }}>Players</strong>
+          <span className="ds-chip accent">{participants.length}</span>
+        </div>
+        <div className="ph-chips">
+          {participants.map((p, index) => (
+            <span key={p.id} className={`ph-chip ${p.id === participantData?.id ? 'you' : ''}`}
+              style={{ animationDelay: `${index * 40}ms`, '--c': COLORS[index % COLORS.length] }}>
+              <i>{p.name.charAt(0).toUpperCase()}</i>{p.name}{p.id === participantData?.id && <em>you</em>}
+            </span>
+          ))}
         </div>
       </div>
-      
-      <div className="lobby-content">
-        <div className="waiting-animation">
-          <div className="pulse-circle"></div>
-          <div className="pulse-circle delay-1"></div>
-          <div className="pulse-circle delay-2"></div>
-        </div>
-        
-        <div className="participants-count">
-          <div className="count-number">{participants.length}</div>
-          <div className="count-label">
-            {participants.length === 1 ? 'Student' : 'Students'} Joined
-          </div>
-        </div>
-        
-        {participants.length > 0 && (
-          <div className="participants-list">
-            <h3>Participants:</h3>
-            <div className="participants-grid">
-              {participants.map((p, index) => (
-                <div 
-                  key={p.id} 
-                  className={`participant-chip ${p.id === participantData?.id ? 'you' : ''}`}
-                  style={{ animationDelay: `${index * 50}ms` }}
-                >
-                  {p.name}
-                  {p.id === participantData?.id && <span className="you-badge">(You)</span>}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-      
-      <div className="lobby-footer">
-        <p>The quiz will start soon...</p>
-        <p className="hint">Keep this screen open and ready!</p>
-      </div>
+
+      <button type="button" className="ds-btn ds-btn-ghost ph-leave" onClick={onExit}>Leave quiz</button>
     </div>
   )
 }

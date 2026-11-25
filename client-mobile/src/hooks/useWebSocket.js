@@ -17,6 +17,11 @@ export function useWebSocket() {
       reconnectionAttempts: 5
     })
     
+    // Server-initiated latency probe for fair buzzer judging: ack immediately.
+    newSocket.on('latency-ping', (ack) => {
+      if (typeof ack === 'function') ack()
+    })
+
     // Connection handlers
     newSocket.on('connect', () => {
       console.log('Connected to server')

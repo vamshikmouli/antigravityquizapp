@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import './WaitingLobby.css'
 
 function WaitingLobby({ socket, sessionData, userRole, audioManager }) {
   const [participants, setParticipants] = useState([])
@@ -55,113 +54,67 @@ function WaitingLobby({ socket, sessionData, userRole, audioManager }) {
     }
   }, [socket])
   
+  const host = typeof window !== 'undefined' ? window.location.host : ''
+  const isLocal = /^(localhost|127\.0\.0\.1|\[::1\])(:|$)/.test(host)
+  const AVATAR_COLORS = ['#818cf8', '#f472b6', '#34d399', '#fbbf24', '#38bdf8', '#c084fc', '#fb923c']
+
   return (
-    <div className="waiting-lobby-tv fade-in">
-      <div className="lobby-header-tv">
-        <h1>Waiting for Quiz to Start</h1>
-        <div className="session-code-display">
-          <span className="code-label">Session Code:</span>
-          <span className="code-value">{sessionData?.code}</span>
+    <div className="gm-lobby">
+      <section className="gm-join-card">
+        <div className="ds-kicker">Join the quiz</div>
+        <h1>Grab your phone <span className="ds-grad-text">and join!</span></h1>
+        <ol className="gm-join-steps">
+          <li><span>1</span>Open {isLocal ? 'the quiz app' : <strong>{host}</strong>} on your phone</li>
+          <li><span>2</span>Enter this code and your name</li>
+        </ol>
+        <div className="gm-code" aria-label="Session code">{sessionData?.code}</div>
+        <div className="gm-waiting"><span className="gm-dots"><i /><i /><i /></span>
+          {userRole === 'host' ? 'Start when everyone is in' : 'Waiting for the host to start…'}</div>
+      </section>
+
+      <section className="gm-players">
+        <div className="gm-players-head">
+          <h2>Players</h2>
+          <span className="gm-count">{participants.length}</span>
         </div>
-      </div>
-      
-      <div className="lobby-main-tv">
-        <div className="participants-count-tv">
-          <div className="count-circle">
-            <div className="count-number-tv">{participants.length}</div>
-            <div className="count-label-tv">
-              {participants.length === 1 ? 'Student' : 'Students'}
-            </div>
+        {participants.length === 0 ? (
+          <div className="gm-players-empty">
+            <div className="gm-pulse">📱</div>
+            <p>Players will appear here as they join.</p>
           </div>
-        </div>
-        
-        {participants.length > 0 && (
-          <div className="participants-grid-tv">
+        ) : (
+          <div className="gm-player-grid">
             {participants.map((p, index) => (
-              <div
-                key={p.id}
-                className="participant-card-tv"
-                style={{ animationDelay: `${index * 50}ms` }}
-              >
-                <div className="participant-avatar">
-                  {p.name.charAt(0).toUpperCase()}
-                </div>
-                <div className="participant-name-tv">{p.name}</div>
+              <div key={p.id} className="gm-player" style={{ animationDelay: `${index * 40}ms`, '--c': AVATAR_COLORS[index % AVATAR_COLORS.length] }}>
+                <span className="gm-avatar">{p.name.charAt(0).toUpperCase()}</span>
+                <span className="gm-player-name">{p.name}</span>
                 {userRole === 'host' && (
-                  <button 
-                    className="remove-participant-btn" 
-                    onClick={() => handleRemoveParticipant(p.id)}
-                    title="Remove Student"
-                  >
-                    ×
-                  </button>
+                  <button className="gm-remove" onClick={() => handleRemoveParticipant(p.id)} title="Remove student" aria-label={`Remove ${p.name}`}>×</button>
                 )}
               </div>
             ))}
           </div>
         )}
-      </div>
-      
-      <div className="lobby-footer-tv">
-        <div className="waiting-indicator">
-          <div className="dot"></div>
-          <div className="dot"></div>
-          <div className="dot"></div>
+      </section>
+
+      {userRole === 'host' ? (
+        <div className="ds-actionbar gm-lobby-bar">
+          <span className="ds-muted" style={{ flex: 1 }}>
+            {participants.length ? `${participants.length} player${participants.length === 1 ? '' : 's'} ready` : 'Waiting for players…'}
+          </span>
+          {isAudioLocked && sessionData?.musicEnabled && (
+            <button className="ds-btn" onClick={handleUnlockAudio}>🔊 Enable sound</button>
+          )}
+          <button className="ds-btn ds-btn-success ds-btn-lg" onClick={handleStartQuiz}>▶ Start quiz</button>
         </div>
-        
-        {userRole === 'host' ? (
-          <div style={{ display: 'flex', gap: '20px' }}>
-            {isAudioLocked && sessionData?.musicEnabled && (
-              <button 
-                className="start-quiz-button"
-                onClick={handleUnlockAudio}
-                style={{
-                  background: 'var(--color-primary)',
-                  fontSize: '16px',
-                  padding: '12px 20px'
-                }}
-              >
-                🔊 ENABLE SOUND
-              </button>
-            )}
-            <button 
-              className="start-quiz-button"
-              onClick={handleStartQuiz}
-              style={{
-                fontSize: '18px',
-                padding: '12px 24px',
-                background: 'var(--color-success)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '12px',
-                cursor: 'pointer',
-                fontWeight: 'bold',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
-              }}
-            >
-              ▶ START QUIZ
-            </button>
+      ) : (
+        isAudioLocked && sessionData?.musicEnabled && (
+          <div className="ds-actionbar gm-lobby-bar">
+            <span className="ds-muted" style={{ flex: 1 }}>Tap to allow music on this screen</span>
+            <button className="ds-btn" onClick={handleUnlockAudio}>🔊 Enable sound</button>
           </div>
-        ) : (
-          <div>
-            {isAudioLocked && sessionData?.musicEnabled && (
-               <button 
-               className="start-quiz-button"
-               onClick={handleUnlockAudio}
-               style={{
-                 background: 'var(--color-primary)',
-                 fontSize: '14px',
-                 padding: '10px 20px',
-                 marginBottom: '10px'
-               }}
-             >
-               🔊 Enable Sound
-             </button>
-            )}
-            <p>Waiting for host to start the quiz...</p>
-          </div>
-        )}
-      </div>
+        )
+      )}
     </div>
   )
 }

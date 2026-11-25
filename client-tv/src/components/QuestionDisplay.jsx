@@ -3,7 +3,60 @@ import Leaderboard from './Leaderboard'
 import FinalResultsDisplay from './FinalResultsDisplay'
 import { SOCKET_EVENTS, TIME_LIMITS } from '../../../shared/constants'
 import MusicControls from './MusicControls'
+import { TurnCard, ClueBoardTV, TurnToast, TeamRoundRecap, formatLabel } from './TeamBits'
 import './QuestionDisplay.css'
+
+// Host-only explanations for the fairness flags the server attaches.
+const FLAG_INFO = {
+  CLAMPED: 'Phone reported a faster time than the network allows — server time used',
+  LAG_SPIKE: 'Unusually slow connection this round — latency credit capped',
+  NO_CLIENT_TIME: 'Phone sent no reaction time — server estimate used',
+  NO_ACK: 'Phone did not confirm the buzzer opened — typical latency used',
+  NO_RTT: 'No latency data — no compensation given',
+  BOT_PATTERN: 'Consistently inhumanly fast and uniform — possible auto-tapper'
+}
+const SERIOUS_FLAGS = new Set(['CLAMPED', 'BOT_PATTERN'])
+
+/** Host panel: who pressed, their judged times, flags, and re-award buttons. */
+function BuzzReview({ result, winnerId, canOverride, onAward }) {
+  const winnerFlags = result.ranking.find(r => r.participantId === winnerId)?.flags || []
+  const suspicious = winnerFlags.some(f => SERIOUS_FLAGS.has(f))
+  const [open, setOpen] = useState(suspicious)
+  const slowest = Math.max(1, ...result.ranking.map(r => r.reactionMs || 0))
+  return (
+    <div className={`buzz-review ${suspicious ? 'suspicious' : ''} ${open ? 'open' : ''}`}>
+      <button className="buzz-review-toggle" onClick={() => setOpen(o => !o)} aria-expanded={open}>
+        <span className="buzz-review-icon">{suspicious ? '⚠️' : '⏱'}</span>
+        <span className="buzz-review-title">{suspicious ? 'Check this buzz' : 'Buzz details'}</span>
+        <span className="buzz-review-meta">
+          {result.ranking.length} buzz{result.ranking.length === 1 ? '' : 'es'}
+          {result.falseStarts > 0 && ` · ${result.falseStarts} false start${result.falseStarts > 1 ? 's' : ''}`}
+        </span>
+        <span className="buzz-review-caret">{open ? '▴' : '▾'}</span>
+      </button>
+      {open && (
+        <ol className="buzz-review-list">
+          {result.ranking.map((r, i) => (
+            <li key={r.participantId} className={r.participantId === winnerId ? 'is-winner' : ''}>
+              <span className="buzz-pos">{r.participantId === winnerId ? '🏆' : i + 1}</span>
+              <span className="buzz-name">{r.participantName}</span>
+              <span className="buzz-bar"><i style={{ width: `${Math.max(6, ((r.reactionMs || 0) / slowest) * 100)}%` }} /></span>
+              <span className="buzz-ms">{r.reactionMs} ms</span>
+              <span className="buzz-flags">
+                {r.flags?.filter(f => FLAG_INFO[f]).map(f => (
+                  <span key={f} className={`buzz-flag ${SERIOUS_FLAGS.has(f) ? 'serious' : ''}`} title={FLAG_INFO[f]}>{f.replaceAll('_', ' ').toLowerCase()}</span>
+                ))}
+              </span>
+              {canOverride && r.participantId !== winnerId
+                ? <button className="buzz-award" onClick={() => onAward(r.participantId)}>Award</button>
+                : <span className="buzz-award-spacer" />}
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  )
+}
 
 function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialGameState }) {
   const [currentQuestion, setCurrentQuestion] = useState(initialGameState?.currentQuestion || null)
@@ -30,19 +83,31 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
   })
   
   const [buzzerWinner, setBuzzerWinner] = useState(null)
+  const [buzzResult, setBuzzResult] = useState(null) // { fairness, ranking, falseStarts }
   const [buzzerStartTime, setBuzzerStartTime] = useState(null)
   const [isBuzzerPhase, setIsBuzzerPhase] = useState(false)
   const [leaderboard, setLeaderboard] = useState([])
   const [showResults, setShowResults] = useState(false)
   const [questionResults, setQuestionResults] = useState(null)
   const [roundResults, setRoundResults] = useState(null)
+  // Competition (team) mode
+  const [turn, setTurn] = useState(initialGameState?.currentQuestion?.turn || null)
+  const [tried, setTried] = useState([])
+  const [turnResult, setTurnResult] = useState(null)
+  const [clueLocked, setClueLocked] = useState([])
+  const [eliminatedNow, setEliminatedNow] = useState([])
+  const toastTimer = useRef(null)
   
   const [participants, setParticipants] = useState([]);
   const [selectedParticipant, setSelectedParticipant] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
 
   // Floating Timer State
-  const [timerPos, setTimerPos] = useState({ x: 1000, y: 100 });
+  // Default: bottom-right of the main area, clear of the question text and host controls.
+  const [timerPos, setTimerPos] = useState(() => ({
+    x: Math.max(20, (typeof window !== 'undefined' ? window.innerWidth : 1600) - Math.max(240, Math.min(360, window.innerWidth * 0.19)) - 170),
+    y: Math.max(100, (typeof window !== 'undefined' ? window.innerHeight : 900) - 170)
+  }));
   const [timerScale, setTimerScale] = useState(1);
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
@@ -57,7 +122,7 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
     setSearchTerm('');
     
     // Fetch participants for picking in ORAL_OPEN
-    if (currentQuestion?.type === 'ORAL_OPEN' && userRole === 'host') {
+    if ((currentQuestion?.type === 'ORAL_OPEN' || currentQuestion?.type === 'CLUE') && userRole === 'host') {
       socket.emit('get-participants', (data) => {
         if (data && data.participants) {
           setParticipants(data.participants);
@@ -87,11 +152,17 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
         setTimeRemaining(data.question.timeLimit)
       }
       setBuzzerWinner(null)
+      setBuzzResult(null)
       setBuzzerStartTime(null)
       setIsBuzzerPhase(false)
       setShowResults(false)
       setQuestionResults(null)
       setRoundResults(null) // Clear round results
+      setTurn(data.question.turn || null)
+      setTried([])
+      setTurnResult(null)
+      setClueLocked([])
+      setEliminatedNow([])
 
       // Play music
       audioManager?.play('QUESTION')
@@ -100,6 +171,11 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
     // Buzzer winner
     socket.on('buzzer-winner', (data) => {
       setBuzzerWinner(data.winner)
+      setBuzzResult({
+        fairness: data.fairness || null,
+        ranking: data.ranking || [],
+        falseStarts: data.falseStarts || 0
+      })
       setBuzzerStartTime(Date.now())
       setIsBuzzerPhase(true)
       setTimerPhase('BUZZER')
@@ -124,6 +200,36 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
     })
     
     // Round Ended
+    socket.on('turn-passed', (data) => {
+      setTurn((prev) => { if (prev) setTried((t) => [...t, prev.name]); return data.turn })
+      setCurrentQuestion((q) => (q && q.id === data.questionId ? { ...q, timeLimit: data.timeLimit, readingTime: 0 } : q))
+      setQuestionStartTime(data.startTime)
+      setTimerPhase('QUESTION')
+      setTotalTime(data.timeLimit)
+      setTimeRemaining(data.timeLimit)
+    })
+
+    socket.on('turn-result', (data) => {
+      setTurnResult(data)
+      clearTimeout(toastTimer.current)
+      toastTimer.current = setTimeout(() => setTurnResult(null), 3500)
+    })
+
+    socket.on('clue-revealed', (data) => {
+      setCurrentQuestion((q) => (q && q.id === data.questionId ? { ...q, clues: data.clues, pointsNow: data.pointsNow } : q))
+    })
+
+    socket.on('clue-reopened', (data) => {
+      setBuzzerWinner(null)
+      setBuzzResult(null)
+      setIsBuzzerPhase(false)
+      setClueLocked(data.lockedOut || [])
+    })
+
+    socket.on('group-eliminated', (data) => {
+      setEliminatedNow((prev) => [...prev, ...(data.groups || [])])
+    })
+
     socket.on('round-ended', (data) => {
       setRoundResults(data)
       setLeaderboard(data.leaderboard)
@@ -153,6 +259,11 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
       socket.off('show-results')
       socket.off('round-ended')
       socket.off('trigger-next-question')
+      socket.off('turn-passed')
+      socket.off('turn-result')
+      socket.off('clue-revealed')
+      socket.off('clue-reopened')
+      socket.off('group-eliminated')
     }
   }, [socket])
   
@@ -266,6 +377,20 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
   }
   
   // If Round Ended, show large Leaderboard
+  if (roundResults?.mode === 'TEAMS') {
+    return (
+      <div className="question-display-tv fade-in round-recap">
+        <TeamRoundRecap
+          data={roundResults}
+          isHost={userRole === 'host'}
+          eliminatedNow={eliminatedNow}
+          onEliminate={(ids) => socket.emit('eliminate-group', { participantIds: ids })}
+          onNextRound={() => socket.emit('next-question', { force: true })}
+        />
+      </div>
+    )
+  }
+
   if (roundResults) {
     return (
       <div className="question-display-tv fade-in round-recap">
@@ -310,7 +435,9 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
               <span className="question-number-tv">
                 Question {currentQuestion.questionNumber}/{currentQuestion.totalQuestions}
               </span>
-              <span className="round-badge-tv">Round {currentQuestion.round}</span>
+              <span className="round-badge-tv">{currentQuestion.roundName || `Round ${currentQuestion.round}`}</span>
+              {currentQuestion.format && <span className="tm-chip">{formatLabel(currentQuestion.format)}</span>}
+              {currentQuestion.category && <span className="tm-chip soft">{currentQuestion.category}</span>}
             </div>
             <div className="header-actions">
               <div className="points-display">
@@ -343,11 +470,25 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
             <h2 className="question-text-tv">{currentQuestion.text}</h2>
           </div>
 
+          {currentQuestion.format === 'DIRECTED' && !showResults && <TurnCard turn={turn} tried={tried} />}
+          {currentQuestion.type === 'CLUE' && (
+            <>
+              <ClueBoardTV question={currentQuestion} reveal={showResults ? questionResults?.clues : null} />
+              {!showResults && (
+                <div className="tm-clue-status">
+                  <span className="tm-worth-tv">Worth <b>{currentQuestion.pointsNow}</b> pts now</span>
+                  {clueLocked.length > 0 && <span className="tm-locked-tv">🔒 {participants.filter((p) => clueLocked.includes(p.id)).map((p) => p.name).join(', ') || `${clueLocked.length} locked out`}</span>}
+                </div>
+              )}
+            </>
+          )}
+          <TurnToast result={turnResult} />
+
           {/* Row for Correct Answer and Buzzer Winner */}
           {(showResults || buzzerWinner) && (
             <div className="results-row-wrapper">
               {/* Explicit Correct Answer Reveal */}
-              {showResults && (currentQuestion.type === 'SHORT_ANSWER' || currentQuestion.type === 'BUZZER' || currentQuestion.type === 'TRUE_FALSE' || currentQuestion.type === 'ORAL_BUZZER' || currentQuestion.type === 'ORAL_OPEN') && (
+              {showResults && (currentQuestion.type === 'SHORT_ANSWER' || currentQuestion.type === 'BUZZER' || currentQuestion.type === 'TRUE_FALSE' || currentQuestion.type === 'ORAL_BUZZER' || currentQuestion.type === 'ORAL_OPEN' || currentQuestion.type === 'CLUE') && (
                 <div className="revealed-answer-container fade-in">
                   <div className="revealed-answer-label">CORRECT ANSWER</div>
                   <div className="revealed-answer-box">
@@ -358,9 +499,18 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
               
               {/* Buzzer Winner Display - Compact One Line */}
               {buzzerWinner && (
-                <div className="buzzer-winner-compact slide-in-left">
-                  <span className="winner-label-compact">🏆 First to Buzz! </span>
-                  <span className="winner-name-compact">{buzzerWinner.participantName}</span>
+                <div className="buzz-winner-card" key={buzzerWinner.participantId}>
+                  <span className="buzz-winner-avatar">{buzzerWinner.participantName?.charAt(0).toUpperCase()}<i>🔔</i></span>
+                  <div className="buzz-winner-text">
+                    <small>{buzzResult?.fairness?.overridden ? 'Awarded by host' : 'First to buzz'}</small>
+                    <strong>{buzzerWinner.participantName}</strong>
+                  </div>
+                  {buzzResult?.fairness?.reactionMs != null && (
+                    <div className="buzz-winner-stats">
+                      <span><b>{buzzResult.fairness.reactionMs}</b> ms</span>
+                      {buzzResult.fairness.marginMs != null && <span>ahead by <b>{buzzResult.fairness.marginMs}</b> ms</span>}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -381,7 +531,7 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
                 </div>
               )}
             </div>
-          ) : currentQuestion.type === 'ORAL_OPEN' ? (
+          ) : currentQuestion.type === 'ORAL_OPEN' && currentQuestion.format !== 'DIRECTED' ? (
             <div className="oral-open-container">
               {userRole === 'host' && !showResults ? (
                 <div className="participant-picker card-gradient">
@@ -477,8 +627,39 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
           )}
           
           {/* Host Controls */}
+          {userRole === 'host' && buzzerWinner && buzzResult?.ranking?.length > 0 && (
+            <BuzzReview
+              key={currentQuestion.id}
+              result={buzzResult}
+              winnerId={buzzerWinner.participantId}
+              canOverride={!showResults}
+              onAward={(participantId) => socket.emit('buzzer-override', {
+                questionId: currentQuestion.id,
+                participantId
+              })}
+            />
+          )}
+
           {userRole === 'host' && (
             <div className="host-controls">
+              {currentQuestion.format === 'DIRECTED' && turn && !showResults && (
+                <div className="oral-marking-controls">
+                  <button onClick={() => socket.emit('mark-turn', { questionId: currentQuestion.id, isCorrect: true })} className="control-btn correct-btn-large">✓ {turn.name} correct</button>
+                  <button onClick={() => socket.emit('mark-turn', { questionId: currentQuestion.id, isCorrect: false })} className="control-btn incorrect-btn-large">✗ Wrong{turn.isPass ? '' : ' · pass'}</button>
+                </div>
+              )}
+              {currentQuestion.type === 'CLUE' && !showResults && (
+                buzzerWinner ? (
+                  <div className="oral-marking-controls">
+                    <button onClick={() => socket.emit('mark-turn', { questionId: currentQuestion.id, isCorrect: true })} className="control-btn correct-btn-large">✓ Correct +{currentQuestion.pointsNow}</button>
+                    <button onClick={() => socket.emit('mark-turn', { questionId: currentQuestion.id, isCorrect: false })} className="control-btn incorrect-btn-large">✗ Wrong{currentQuestion.negativePoints ? ` −${currentQuestion.negativePoints}` : ''}</button>
+                  </div>
+                ) : (currentQuestion.clues?.length || 0) < (currentQuestion.cluesTotal || 0) && (
+                  <button onClick={() => socket.emit('reveal-clue', { questionId: currentQuestion.id })} className="control-btn results-btn">
+                    🔍 Reveal clue {(currentQuestion.clues?.length || 0) + 1} · {currentQuestion.cluePoints?.[currentQuestion.clues?.length || 0]} pts
+                  </button>
+                )
+              )}
               {currentQuestion.type === 'ORAL_BUZZER' && buzzerWinner && !showResults && (
                 <div className="oral-marking-controls">
                   <button
