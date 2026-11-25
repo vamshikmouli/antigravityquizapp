@@ -26,6 +26,8 @@ function QuizScreen({ socket, participantData, initialGameState }) {
   const [canAnswer, setCanAnswer] = useState(initialGameState?.question && !initialGameState?.hasAnswered && !['BUZZER', 'ORAL_BUZZER'].includes(initialGameState?.question.type))
   const [answerSubmitted, setAnswerSubmitted] = useState(initialGameState?.hasAnswered || false)
   const [feedback, setFeedback] = useState(initialGameState?.lastAnswerResult || null)
+  const [revealed, setRevealed] = useState(false) // host showed the answer: the clock stops
+  const [revealedAnswer, setRevealedAnswer] = useState(null)
   const [score, setScore] = useState(participantData?.score || 0)
   const [rank, setRank] = useState(null)
   const [isReading, setIsReading] = useState(false)
@@ -86,6 +88,8 @@ function QuizScreen({ socket, participantData, initialGameState }) {
       setBuzzerStartTime(null)
       setAnswerSubmitted(false)
       setFeedback(null)
+      setRevealed(false)
+      setRevealedAnswer(null)
       setPhase('idle')
       setBuzzResult(null)
       roundIdRef.current = null
@@ -212,6 +216,13 @@ function QuizScreen({ socket, participantData, initialGameState }) {
       setCanAnswer(true)
     })
     
+    // Host revealed the answer: stop the clock and close answering
+    socket.on('show-results', (data) => {
+      setRevealed(true)
+      setRevealedAnswer(data?.correctAnswer ?? null)
+      setCanAnswer(false)
+    })
+
     // Answer received
     socket.on('answer-received', (data) => {
       setAnswerSubmitted(true)
@@ -237,6 +248,7 @@ function QuizScreen({ socket, participantData, initialGameState }) {
       socket.off('buzzer-locked')
       socket.off('buzzer-timeout')
       socket.off('answer-received')
+      socket.off('show-results')
       socket.off('leaderboard-update')
       socket.off('turn-passed')
       socket.off('turn-result')
@@ -249,7 +261,7 @@ function QuizScreen({ socket, participantData, initialGameState }) {
   
   // Timer effect
   useEffect(() => {
-    if (!currentQuestion) return
+    if (!currentQuestion || revealed) return
 
     timerRef.current = setInterval(() => {
       if (buzzerWinner && buzzerStartTime) {
@@ -291,7 +303,7 @@ function QuizScreen({ socket, participantData, initialGameState }) {
     }, 100)
 
     return () => clearInterval(timerRef.current)
-  }, [currentQuestion, questionStartTime, buzzerWinner, buzzerStartTime, timerPhase])
+  }, [currentQuestion, questionStartTime, buzzerWinner, buzzerStartTime, timerPhase, revealed])
   
   const handleBuzzerPress = (e) => {
     if (!socket || !currentQuestion) return
@@ -374,7 +386,7 @@ function QuizScreen({ socket, participantData, initialGameState }) {
           <div className="round-info-badge">R{currentQuestion.round}</div>
         </div>
 
-        <div className={`timer-circular-container-mobile ${timerPhase.toLowerCase()}-phase`}>
+        <div className={`timer-circular-container-mobile ${timerPhase.toLowerCase()}-phase ${revealed ? 'stopped' : ''}`}>
           <svg className="timer-svg-mobile" viewBox="0 0 100 100">
             <circle className="timer-bg-mobile" cx="50" cy="50" r="45" />
             <circle 
@@ -394,7 +406,7 @@ function QuizScreen({ socket, participantData, initialGameState }) {
           <div className="timer-content-mobile">
             <span className="timer-digits-mobile">{timeRemaining}</span>
             <span className="timer-unit-mobile">
-              {timerPhase === 'READING' ? 'READING' : 
+              {revealed ? 'DONE' : timerPhase === 'READING' ? 'READING' : 
                timerPhase === 'BUZZER' ? 'GO!' : 'SEC'}
             </span>
           </div>
@@ -441,7 +453,7 @@ function QuizScreen({ socket, participantData, initialGameState }) {
       {isClue && <ClueBoard question={currentQuestion} locked={clueLocked} />}
       <TurnToast result={turnResult} />
 
-      {(currentQuestion.type === 'BUZZER' || currentQuestion.type === 'ORAL_BUZZER' || (isClue && !clueLocked)) && buzzerPhase !== 'idle' && !buzzerWinner ? (
+      {(currentQuestion.type === 'BUZZER' || currentQuestion.type === 'ORAL_BUZZER' || (isClue && !clueLocked)) && buzzerPhase !== 'idle' && !buzzerWinner && !revealed ? (
         <BuzzerButton
           phase={buzzerPhase}
           onPress={handleBuzzerPress}
@@ -531,6 +543,14 @@ function QuizScreen({ socket, participantData, initialGameState }) {
         />
       )}
       
+      {/* Answer shown on the big screen and this player didn't answer */}
+      {revealed && !feedback && revealedAnswer && (
+        <div className="ph-revealed">
+          <span>Time's up — the answer was</span>
+          <strong>{revealedAnswer}</strong>
+        </div>
+      )}
+
       {/* Feedback */}
       {feedback && (
         <div className={`feedback-container ${feedback.isCorrect ? 'correct' : 'wrong'}`}>

@@ -12,6 +12,7 @@ const ThemeToggle = ({ style }) => {
         background: 'rgba(255, 255, 255, 0.1)',
         border: '1px solid rgba(255, 255, 255, 0.2)',
         fontSize: '1.5rem',
+        color: 'inherit',
         cursor: 'pointer',
         padding: '12px',
         display: 'flex',
