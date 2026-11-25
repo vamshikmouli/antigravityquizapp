@@ -71,3 +71,39 @@
   color: var(--color-text-secondary);
   animation: pulse 2s ease-in-out infinite;
 }
+
+/* ---- Fair buzzer phases ---- */
+.buzzer-button {
+  touch-action: manipulation;   /* no double-tap zoom delay */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Get ready: painted already, just not red yet. Still tappable (= false start). */
+.buzzer-button.phase-armed {
+  background: #334155;
+  box-shadow: none;
+  border-color: rgba(255, 255, 255, 0.08);
+  transition: none;
+}
+
+/* Open must appear in a single frame: no transition into this state. */
+.buzzer-button.phase-open {
+  transition: none;
+}
+
+.buzzer-button.phase-pressed:disabled {
+  background: var(--color-success, #10b981);
+  opacity: 0.85;
+}
+
+.buzzer-button.phase-falseStart:disabled {
+  background: #7f1d1d;
+  opacity: 0.85;
+}
+
+.buzzer-button.phase-falseStart .buzzer-text,
+.buzzer-button.phase-armed .buzzer-text {
+  font-size: 20px;
+}

@@ -113,6 +113,7 @@ model Session {
   questions            SessionQuestion[]
   participants         Participant[]
   analytics            Analytics?
+  buzzerPresses        BuzzerPress[]
 }
 
 enum SessionStatus {
@@ -198,4 +199,30 @@ model Analytics {
   createdAt          DateTime @default(now())
   
   session            Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+// Audit trail for buzzer rounds: every press attempt with the numbers used to
+// judge it, so disputes can be reviewed and thresholds tuned from real data.
+// Written after the round is decided (never on the judging hot path).
+model BuzzerPress {
+  id              String   @id @default(uuid())
+  sessionId       String
+  questionId      String
+  roundId         String
+  participantId   String
+  participantName String?
+  claimedMs       Int?     // reaction time reported by the phone
+  observedMs      Int?     // server: press arrival - OPEN sent
+  rttMs           Int?     // OPEN round trip (sent -> ack after paint)
+  creditMs        Int?     // latency credited after caps
+  effectiveMs     Int?     // the time that was ranked
+  flags           String[]
+  outcome         String   // WON | LOST | LATE | REJECTED | OVERRIDDEN
+  tenantId        String?
+  createdAt       DateTime @default(now())
+
+  session         Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, questionId])
+  @@index([roundId])
 }

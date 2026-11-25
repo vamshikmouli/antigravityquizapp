@@ -5,6 +5,49 @@ import { SOCKET_EVENTS, TIME_LIMITS } from '../../../shared/constants'
 import MusicControls from './MusicControls'
 import './QuestionDisplay.css'
 
+// Host-only explanations for the fairness flags the server attaches.
+const FLAG_INFO = {
+  CLAMPED: 'Phone reported a faster time than the network allows — server time used',
+  LAG_SPIKE: 'Unusually slow connection this round — latency credit capped',
+  NO_CLIENT_TIME: 'Phone sent no reaction time — server estimate used',
+  NO_ACK: 'Phone did not confirm the buzzer opened — typical latency used',
+  NO_RTT: 'No latency data — no compensation given',
+  BOT_PATTERN: 'Consistently inhumanly fast and uniform — possible auto-tapper'
+}
+const SERIOUS_FLAGS = new Set(['CLAMPED', 'BOT_PATTERN'])
+
+/** Host panel: who pressed, their judged times, flags, and re-award buttons. */
+function BuzzReview({ result, winnerId, canOverride, onAward }) {
+  const [open, setOpen] = useState(false)
+  const winnerFlags = result.ranking.find(r => r.participantId === winnerId)?.flags || []
+  const suspicious = winnerFlags.some(f => SERIOUS_FLAGS.has(f))
+  return (
+    <div className={`buzz-review ${suspicious ? 'suspicious' : ''}`}>
+      <button className="buzz-review-toggle" onClick={() => setOpen(o => !o)}>
+        {suspicious ? '⚠️ Check this buzz' : '⏱ Buzz details'}
+        {result.falseStarts > 0 && ` · ${result.falseStarts} false start${result.falseStarts > 1 ? 's' : ''}`}
+        {open ? ' ▲' : ' ▼'}
+      </button>
+      {open && (
+        <ol className="buzz-review-list">
+          {result.ranking.map((r) => (
+            <li key={r.participantId} className={r.participantId === winnerId ? 'is-winner' : ''}>
+              <span className="buzz-name">{r.participantName}</span>
+              <span className="buzz-ms">{r.reactionMs} ms</span>
+              {r.flags?.filter(f => FLAG_INFO[f]).map(f => (
+                <span key={f} className={`buzz-flag ${SERIOUS_FLAGS.has(f) ? 'serious' : ''}`} title={FLAG_INFO[f]}>{f.replaceAll('_', ' ')}</span>
+              ))}
+              {canOverride && r.participantId !== winnerId && (
+                <button className="buzz-award" onClick={() => onAward(r.participantId)}>Award</button>
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  )
+}
+
 function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialGameState }) {
   const [currentQuestion, setCurrentQuestion] = useState(initialGameState?.currentQuestion || null)
   const [questionStartTime, setQuestionStartTime] = useState(initialGameState?.startTime || null)
@@ -30,6 +73,7 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
   })
   
   const [buzzerWinner, setBuzzerWinner] = useState(null)
+  const [buzzResult, setBuzzResult] = useState(null) // { fairness, ranking, falseStarts }
   const [buzzerStartTime, setBuzzerStartTime] = useState(null)
   const [isBuzzerPhase, setIsBuzzerPhase] = useState(false)
   const [leaderboard, setLeaderboard] = useState([])
@@ -87,6 +131,7 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
         setTimeRemaining(data.question.timeLimit)
       }
       setBuzzerWinner(null)
+      setBuzzResult(null)
       setBuzzerStartTime(null)
       setIsBuzzerPhase(false)
       setShowResults(false)
@@ -100,6 +145,11 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
     // Buzzer winner
     socket.on('buzzer-winner', (data) => {
       setBuzzerWinner(data.winner)
+      setBuzzResult({
+        fairness: data.fairness || null,
+        ranking: data.ranking || [],
+        falseStarts: data.falseStarts || 0
+      })
       setBuzzerStartTime(Date.now())
       setIsBuzzerPhase(true)
       setTimerPhase('BUZZER')
@@ -361,6 +411,13 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
                 <div className="buzzer-winner-compact slide-in-left">
                   <span className="winner-label-compact">🏆 First to Buzz! </span>
                   <span className="winner-name-compact">{buzzerWinner.participantName}</span>
+                  {buzzResult?.fairness?.reactionMs != null && (
+                    <span className="winner-margin-compact">
+                      {buzzResult.fairness.reactionMs} ms
+                      {buzzResult.fairness.marginMs != null && ` · by ${buzzResult.fairness.marginMs} ms`}
+                      {buzzResult.fairness.overridden && ' · awarded by host'}
+                    </span>
+                  )}
                 </div>
               )}
             </div>
@@ -479,6 +536,17 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
           {/* Host Controls */}
           {userRole === 'host' && (
             <div className="host-controls">
+              {buzzerWinner && buzzResult?.ranking?.length > 0 && (
+                <BuzzReview
+                  result={buzzResult}
+                  winnerId={buzzerWinner.participantId}
+                  canOverride={!showResults}
+                  onAward={(participantId) => socket.emit('buzzer-override', {
+                    questionId: currentQuestion.id,
+                    participantId
+                  })}
+                />
+              )}
               {currentQuestion.type === 'ORAL_BUZZER' && buzzerWinner && !showResults && (
                 <div className="oral-marking-controls">
                   <button

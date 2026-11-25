@@ -49,7 +49,11 @@ export const SOCKET_EVENTS = {
   BUZZER_WINNER: 'buzzer-winner',
   BUZZER_LOCKED: 'buzzer-locked',
   BUZZER_TIMEOUT: 'buzzer-timeout',
-  
+  BUZZER_ARMED: 'buzzer-armed',           // "get ready" — tapping now is a false start
+  BUZZER_FALSE_START: 'buzzer-false-start', // sent to a player who jumped early / was too fast
+  BUZZER_OVERRIDE: 'buzzer-override',     // host re-awards the buzz to another presser
+  LATENCY_PING: 'latency-ping',           // server-initiated RTT probe (client just acks)
+
   // Answers
   SUBMIT_ANSWER: 'submit-answer',
   ANSWER_RECEIVED: 'answer-received',
