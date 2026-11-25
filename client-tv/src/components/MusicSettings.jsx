@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
+import { DEFAULT_MUSIC } from '../lib/defaultMusic';
 
 const MUSIC_TYPES = [
   { key: 'QUESTION', label: 'Question', description: 'While a question is on screen', icon: '❓', color: '#818cf8' },
@@ -82,7 +83,7 @@ function MusicSettings() {
   };
 
   const handleDelete = async (trackId, type) => {
-    if (!confirm('Are you sure you want to delete this music track?')) return;
+    if (!confirm('Remove your track and go back to the built-in music for this stage?')) return;
 
     try {
       const res = await fetch(`/api/music/${trackId}`, {
@@ -104,7 +105,7 @@ function MusicSettings() {
     }
   };
 
-  const playPreview = (type, url) => {
+  const playPreview = (type, url, once = false) => {
     if (playingTrack === type) {
       stopPreview();
       return;
@@ -113,6 +114,7 @@ function MusicSettings() {
     stopPreview();
     audioRef.current = new Audio(url);
     audioRef.current.volume = 0.5;
+    audioRef.current.loop = !once;
     audioRef.current.play();
     setPlayingTrack(type);
 
@@ -149,7 +151,7 @@ function MusicSettings() {
       </header>
 
       <p className="ds-dim" style={{ margin: '0 0 18px' }}>
-        Background tracks for each stage of the quiz. They play on the big screen only — never on students’ phones — and loop automatically.
+        Every stage has original built-in music, so quizzes sound great out of the box. Upload your own track to replace any of them. Music plays on the big screen only, never on students’ phones.
       </p>
 
       {loading && <div style={{ display: 'grid', gap: 10 }}>{[0, 1, 2].map((k) => <div key={k} className="ds-skeleton" style={{ height: 76 }} />)}</div>}
@@ -166,7 +168,7 @@ function MusicSettings() {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="ds-row" style={{ gap: 8 }}>
                     <h3 style={{ fontSize: 15.5 }}>{label}</h3>
-                    {track ? <span className="ds-chip good">✓ Uploaded</span> : <span className="ds-chip">Default</span>}
+                    {track ? <span className="ds-chip good">✓ Your track</span> : <span className="ds-chip accent">♪ Built-in</span>}
                   </div>
                   <p>{description}</p>
                 </div>
@@ -179,12 +181,17 @@ function MusicSettings() {
                       <button type="button" onClick={() => fileInputRefs.current[key]?.click()} className="ds-btn ds-btn-sm" disabled={isUploading}>
                         {isUploading ? 'Uploading…' : 'Replace'}
                       </button>
-                      <button type="button" onClick={() => handleDelete(track.id, key)} className="ds-icon-btn danger" title="Delete" aria-label={`Delete ${label} track`}>🗑️</button>
+                      <button type="button" onClick={() => handleDelete(track.id, key)} className="ds-btn ds-btn-sm ds-btn-ghost" title="Remove your track and use the built-in music">Use built-in</button>
                     </>
                   ) : (
-                    <button type="button" onClick={() => fileInputRefs.current[key]?.click()} disabled={isUploading} className="ds-btn ds-btn-sm ds-btn-primary">
-                      {isUploading ? <><span className="ds-spinner" /> Uploading…</> : '⤴ Upload'}
-                    </button>
+                    <>
+                      <button type="button" onClick={() => playPreview(key, DEFAULT_MUSIC[key], key === 'ANSWER')} className={`ds-btn ds-btn-sm ${isPlaying ? 'ds-btn-primary' : ''}`}>
+                        {isPlaying ? '⏸ Stop' : '▶ Play'}
+                      </button>
+                      <button type="button" onClick={() => fileInputRefs.current[key]?.click()} disabled={isUploading} className="ds-btn ds-btn-sm">
+                        {isUploading ? <><span className="ds-spinner" /> Uploading…</> : '⤴ Upload your own'}
+                      </button>
+                    </>
                   )}
                 </div>
                 <input ref={(el) => (fileInputRefs.current[key] = el)} type="file" accept="audio/mpeg,audio/mp3,audio/ogg,audio/wav"

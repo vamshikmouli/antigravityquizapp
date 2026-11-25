@@ -112,10 +112,28 @@ test('host role with a valid NON-OWNER token is rejected', async (t) => {
   assert.match(r.data?.message || '', /own this session/i);
 });
 
-test('display role WITHOUT a token is rejected', async (t) => {
+test('display role WITHOUT a token joins view-only and cannot control the quiz', async (t) => {
   if (!ready) return t.skip('server/DB unavailable');
-  const r = await joinOnce({ code: made.code, role: 'display' });
-  assert.equal(r.event, 'error');
+  // A TV in a signed-out browser connects with just the code...
+  const r = await joinOnce({ code: made.code, role: 'display' }, { keepOpen: true });
+  assert.equal(r.event, 'session-joined', JSON.stringify({ event: r.event, data: r.data }));
+  // ...but host controls are refused.
+  const reply = await new Promise((resolve) => {
+    r.socket.once('error', (d) => resolve(d?.message || ''));
+    r.socket.once('start-quiz', () => resolve('STARTED'));
+    r.socket.emit('start-quiz');
+    setTimeout(() => resolve('timeout'), 4000);
+  });
+  r.socket.close();
+  assert.match(reply, /only host/i);
+  const s = await prisma.session.findUnique({ where: { id: made.sessionId } });
+  assert.equal(s.status, 'WAITING');
+});
+
+test('display role in a browser signed in to another account still joins view-only', async (t) => {
+  if (!ready) return t.skip('server/DB unavailable');
+  const r = await joinOnce({ code: made.code, role: 'display', token: strangerToken() });
+  assert.equal(r.event, 'session-joined', JSON.stringify(r));
 });
 
 test('student role WITHOUT a token joins anonymously', async (t) => {

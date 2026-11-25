@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import Icon from './common/Icon';
 import { QUESTION_TYPES, typeInfo, LETTERS } from '../lib/questionTypes';
 
 const TEXT_ANSWER_TYPES = ['SHORT_ANSWER', 'ORAL_BUZZER', 'ORAL_OPEN', 'CLUE'];
@@ -185,12 +186,12 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null, 
     <div className="ds-overlay">
       <form className={`ds-modal wide qf t-${formData.type}`} onSubmit={handleSubmit}>
         <div className="ds-modal-header">
-          <span className="ds-type-icon">{t.icon}</span>
+          <span className="ds-type-icon"><Icon name={t.glyph} /></span>
           <div>
             <h2>{editingQuestion ? 'Edit question' : 'New question'}</h2>
             <p>{t.label} · Round {formData.round || 1}</p>
           </div>
-          <button type="button" onClick={onClose} className="ds-close" aria-label="Close">×</button>
+          <button type="button" onClick={onClose} className="ds-close" aria-label="Close"><Icon name="x" size={18} /></button>
         </div>
 
         <div className="ds-modal-body">
@@ -200,7 +201,7 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null, 
               {QUESTION_TYPES.map((qt) => (
                 <button type="button" key={qt.value} className={`qf-type t-${qt.value} ${formData.type === qt.value ? 'active' : ''}`}
                   onClick={() => formData.type !== qt.value && handleChange('type', qt.value)}>
-                  <span className="ds-type-icon">{qt.icon}</span>
+                  <span className="ds-type-icon"><Icon name={qt.glyph} /></span>
                   <span>{qt.label}</span>
                 </button>
               ))}
@@ -222,14 +223,14 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null, 
               )}
               <label className="ds-btn ds-btn-sm" style={{ cursor: 'pointer' }}>
                 <input type="file" accept="image/*" hidden onChange={(e) => handleFileUpload(e, 'question')} />
-                {uploading.question ? <><span className="ds-spinner" /> Uploading…</> : <>🖼️ {formData.imageUrl ? 'Change image' : 'Add image'}</>}
+                {uploading.question ? <><span className="ds-spinner" /> Uploading…</> : <><Icon name="image" /> {formData.imageUrl ? 'Change image' : 'Add image'}</>}
               </label>
               <span className="ds-hint">Optional — shown on the big screen.</span>
             </div>
           </div>
 
           <div className="qf-section">
-            <div className="ds-label">{hasOptions ? 'Options — tap the circle to mark the correct one' : formData.type === 'CLUE' ? 'Clues' : 'Correct answer'}</div>
+            <div className="ds-label">{hasOptions ? 'Options — click a letter to mark the correct answer' : formData.type === 'CLUE' ? 'Clues' : 'Correct answer'}</div>
 
             {hasOptions && (
               <div className="qf-options">
@@ -239,7 +240,7 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null, 
                     <div key={idx} className={`qf-option o${idx % 4} ${correct ? 'correct' : ''}`}>
                       <button type="button" className="qf-mark" disabled={!opt} title="Mark as correct"
                         aria-label={`Mark option ${LETTERS[idx]} correct`} onClick={() => handleChange('correctAnswer', opt)}>
-                        {correct ? '✓' : LETTERS[idx]}
+                        {correct ? <Icon name="check" strokeWidth={3} /> : LETTERS[idx]}
                       </button>
                       {formData.optionImages[idx] && (
                         <span className="qf-opt-img">
@@ -254,7 +255,7 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null, 
                         onChange={(e) => handleOptionChange(idx, e.target.value)} />
                       <label className="ds-icon-btn" title="Add image" style={{ cursor: 'pointer' }}>
                         <input type="file" accept="image/*" hidden onChange={(e) => handleFileUpload(e, 'option', idx)} />
-                        {uploading.options[idx] ? <span className="ds-spinner" /> : '🖼️'}
+                        {uploading.options[idx] ? <span className="ds-spinner" /> : <Icon name="image" size={17} />}
                       </label>
                     </div>
                   );
@@ -267,7 +268,7 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null, 
                 {['True', 'False'].map((val) => (
                   <button type="button" key={val} className={`qf-tf-card ${val === 'True' ? 'yes' : 'no'} ${formData.correctAnswer === val ? 'active' : ''}`}
                     onClick={() => handleChange('correctAnswer', val)}>
-                    <span>{val === 'True' ? '✅' : '❌'}</span>{val}
+                    <span><Icon name={val === 'True' ? 'circle-check' : 'circle-x'} /></span>{val}
                   </button>
                 ))}
               </div>
@@ -293,7 +294,7 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null, 
                 ))}
                 {formData.clues.length < 5 && (
                   <button type="button" className="ds-btn ds-btn-sm" style={{ justifySelf: 'start' }}
-                    onClick={() => setFormData((prev) => ({ ...prev, clues: [...prev.clues, ''], cluePoints: [...prev.cluePoints, DEFAULT_CLUE_POINTS[prev.clues.length] ?? 5] }))}>＋ Add clue</button>
+                    onClick={() => setFormData((prev) => ({ ...prev, clues: [...prev.clues, ''], cluePoints: [...prev.cluePoints, DEFAULT_CLUE_POINTS[prev.clues.length] ?? 5] }))}><Icon name="plus" /> Add clue</button>
                 )}
                 <div className="ds-hint">Clues are revealed one by one; groups buzz in. Fewer clues = more points.</div>
                 <div className="ds-label" style={{ marginTop: 10 }}>Answer</div>
@@ -323,7 +324,7 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null, 
             </div>
           </div>
 
-          {error && <div className="ds-alert bad" style={{ marginTop: 16 }}>⚠️ {error}</div>}
+          {error && <div className="ds-alert bad" style={{ marginTop: 16 }}><Icon name="alert" /> {error}</div>}
         </div>
 
         <div className="ds-modal-footer">

@@ -35,7 +35,7 @@ body {
     var(--ds-bg);
   background-attachment: fixed;
   color: var(--ds-text);
-  font-family: 'Outfit', 'Inter', 'Noto Sans Kannada', 'Nirmala UI', 'Tunga', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: 'Inter', 'Noto Sans Kannada', 'Nirmala UI', 'Tunga', system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 
 body[data-theme='light'] {

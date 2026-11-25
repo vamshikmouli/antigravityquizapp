@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTheme } from '../context/ThemeContext';
+import Icon from './common/Icon';
 
 const ThemeToggle = ({ style }) => {
   const { theme, toggleTheme } = useTheme();
@@ -26,7 +27,7 @@ const ThemeToggle = ({ style }) => {
       title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
       className="theme-toggle-btn"
     >
-      {theme === 'dark' ? '☀️' : '🌙'}
+      <Icon name={theme === 'dark' ? 'sun' : 'moon'} size="1.1em" />
     </button>
   );
 };

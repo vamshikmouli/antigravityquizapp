@@ -255,3 +255,81 @@
 /* #root is a flex column and .container has auto side margins, which makes it
    shrink to its content; force full width. */
 .container { width: 100%; box-sizing: border-box; }
+
+/* ---- compact question screen: everything fits on one phone screen ------ */
+/* Header row = [Q/R] [timer] [score/rank]; sizes shrink with screen height. */
+.quiz-screen { padding: 10px 14px 18px; min-height: 100dvh; }
+.quiz-screen .qs-top {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center; gap: 8px; margin: 0 0 10px; padding: 0;
+}
+.qs-col { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; }
+.qs-col.right { align-items: flex-end; }
+.quiz-screen .qs-top .round-info-badge { font-size: 11px; padding: 2px 9px; }
+.quiz-screen .qs-top .stat-badge { height: 28px; padding: 3px 9px; gap: 5px; }
+.quiz-screen .qs-top .stat-icon { font-size: 13px; }
+.quiz-screen .qs-top .timer-circular-container-mobile { width: 70px; height: 70px; margin: 0; }
+.quiz-screen .qs-top .timer-digits-mobile { font-size: 25px; }
+.quiz-screen .qs-top .timer-unit-mobile { font-size: 8px; letter-spacing: 0.5px; margin-top: 1px; }
+
+.quiz-screen .question-container { padding: 14px 14px 12px; margin-bottom: 10px; border-radius: 20px; }
+.quiz-screen .question-text { font-size: clamp(17px, 5vw, 21px); margin: 0 0 8px; overflow-wrap: anywhere; }
+.quiz-screen .points-badge, .quiz-screen .negative-badge { font-size: 12px; padding: 2px 9px; }
+.quiz-screen .question-image-container { max-height: 28vh; margin-bottom: 10px; display: flex; justify-content: center; }
+.quiz-screen .question-image { max-height: 28vh; height: auto; }
+
+.quiz-screen .tm-turn { margin: 0 0 10px; padding: 8px 12px; gap: 10px; border-radius: 16px; }
+.quiz-screen .tm-turn strong { font-size: 15px; }
+.quiz-screen .tm-turn span { font-size: 12px; }
+.quiz-screen .tm-turn-icon, .quiz-screen .tm-turn-avatar { width: 34px; height: 34px; font-size: 18px; }
+.quiz-screen .tm-clues { margin: 0 0 10px; }
+
+.quiz-screen .ph-options { gap: 8px; }
+.quiz-screen .ph-option { min-height: 54px; padding: 7px 12px 7px 7px; gap: 12px; border-radius: 16px; font-size: 16px; }
+.quiz-screen .ph-option-letter { width: 40px; height: 40px; border-radius: 12px; font-size: 17px; }
+.quiz-screen .ph-option-text { overflow-wrap: anywhere; }
+
+/* Status pill: hidden during a question unless the connection drops; then a red pill at the top. */
+.ph-status.in-quiz:not(.down) { display: none; }
+.ph-status.in-quiz.down { top: 8px; bottom: auto; left: 50%; right: auto; transform: translateX(-50%); opacity: 1; border-color: var(--ds-bad); }
+.ph-status.in-quiz.down .ph-status-conn { font-size: 12px; gap: 6px; color: var(--ds-bad); }
+
+/* Shorter phones (iPhone SE/mini, Android with browser bars) */
+@media (max-height: 720px) {
+  .quiz-screen { padding-top: 8px; }
+  .quiz-screen .qs-top { margin-bottom: 8px; }
+  .quiz-screen .qs-top .timer-circular-container-mobile { width: 60px; height: 60px; }
+  .quiz-screen .qs-top .timer-digits-mobile { font-size: 21px; }
+  .quiz-screen .qs-top .timer-unit-mobile { font-size: 7px; }
+  .quiz-screen .question-container { padding: 11px 12px 10px; margin-bottom: 8px; }
+  .quiz-screen .question-text { font-size: clamp(16px, 4.6vw, 19px); margin-bottom: 6px; }
+  .quiz-screen .question-image-container, .quiz-screen .question-image { max-height: 22vh; }
+  .quiz-screen .tm-turn { margin-bottom: 8px; padding: 6px 10px; }
+  .quiz-screen .tm-turn-icon, .quiz-screen .tm-turn-avatar { width: 30px; height: 30px; font-size: 16px; }
+  .quiz-screen .ph-options { gap: 7px; }
+  .quiz-screen .ph-option { min-height: 48px; font-size: 15px; }
+  .quiz-screen .ph-option-letter { width: 34px; height: 34px; font-size: 15px; border-radius: 10px; }
+  .quiz-screen .bz-stage { width: 200px; height: 200px; }
+  .quiz-screen .buzzer-button { width: 184px; height: 184px; }
+  .quiz-screen .buzzer-container { gap: 12px; padding-top: 6px; }
+}
+@media (max-height: 600px) {
+  .quiz-screen .question-container { padding: 9px 10px 8px; }
+  .quiz-screen .question-text { font-size: 16px; }
+  .quiz-screen .ph-option { min-height: 44px; padding: 5px 10px 5px 5px; }
+  .quiz-screen .ph-option-letter { width: 30px; height: 30px; font-size: 14px; }
+  .quiz-screen .tm-turn span { display: none; }
+  .quiz-screen .bz-stage { width: 170px; height: 170px; }
+  .quiz-screen .buzzer-button { width: 156px; height: 156px; }
+}
+/* Narrow phones (320px) */
+@media (max-width: 350px) {
+  .quiz-screen { padding-left: 10px; padding-right: 10px; }
+  .quiz-screen .qs-top { gap: 6px; }
+  .quiz-screen .qs-top .stat-badge { padding: 3px 7px; }
+  .quiz-screen .ph-option { gap: 10px; }
+}
+/* "Q 10/41": the label was a blank purple square (muted text on the purple fill) */
+.quiz-screen .question-badge { height: 26px; padding: 0 10px; gap: 4px; }
+.quiz-screen .question-badge .q-label { background: none; padding: 0; color: var(--ds-muted); font-size: 11px; }
+.quiz-screen .question-badge .q-numbers { padding: 0; font-size: 13px; }

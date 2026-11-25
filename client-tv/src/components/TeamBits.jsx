@@ -1,3 +1,4 @@
+import Icon from './common/Icon'
 /** Competition (team) mode pieces for the big screen. */
 
 const FORMAT_LABEL = { DIRECTED: 'Directed', ALL: 'Everyone answers', BUZZER: 'Buzzer', CLUE: 'Clue round' }
@@ -47,7 +48,7 @@ export function TurnToast({ result }) {
   if (!result) return null
   return (
     <div className={`tm-toast-tv ${result.isCorrect ? 'good' : 'bad'}`} key={`${result.participantId}-${result.attempt}-${result.clue}-${result.points}`}>
-      <span>{result.isCorrect ? '✓' : result.timedOut ? '⏱' : '✗'}</span>
+      <span><Icon name={result.isCorrect ? 'check' : result.timedOut ? 'clock' : 'x'} /></span>
       <strong>{result.name}</strong>
       {result.isCorrect ? `+${result.points}` : result.timedOut ? 'time up' : result.points ? `${result.points}` : 'wrong'}
     </div>
@@ -73,7 +74,7 @@ export function TeamRoundRecap({ data, isHost, onEliminate, onNextRound, elimina
 
       {topper && (
         <div className="tm-topper-card">
-          <span className="tm-topper-crown">🏆</span>
+          <span className="tm-topper-crown"><Icon name="trophy" /></span>
           <div><small>{topRows.length > 1 ? 'Round toppers (tie)' : 'Round topper'}</small><strong>{topRows.map((r) => r.name).join(' & ')}</strong></div>
           <span className="tm-topper-pts">+{topper.roundPoints}</span>
         </div>
@@ -99,7 +100,7 @@ export function TeamRoundRecap({ data, isHost, onEliminate, onNextRound, elimina
         <div className={`tm-elim ${pending ? 'pending' : 'done'}`}>
           {pending ? (
             <>
-              <strong>⚔️ Elimination — {elim.count - outNow.size} group{elim.count - outNow.size > 1 ? 's' : ''} to go out</strong>
+              <strong><Icon name="swords" /> Elimination — {elim.count - outNow.size} group{elim.count - outNow.size > 1 ? 's' : ''} to go out</strong>
               {elim.tied?.length > 0 && <span className="ds-dim">Tie at the bottom — host chooses who goes out.</span>}
               {isHost && (
                 <div className="tm-elim-actions">
@@ -112,7 +113,7 @@ export function TeamRoundRecap({ data, isHost, onEliminate, onNextRound, elimina
               {!isHost && <span className="ds-dim">Waiting for the host to confirm…</span>}
             </>
           ) : (
-            <strong>🚪 {eliminatedNow.length ? eliminatedNow.map((g) => g.name).join(', ') : rows.filter((r) => outNow.has(r.id)).map((r) => r.name).join(', ')} eliminated</strong>
+            <strong><Icon name="door" /> {eliminatedNow.length ? eliminatedNow.map((g) => g.name).join(', ') : rows.filter((r) => outNow.has(r.id)).map((r) => r.name).join(', ')} eliminated</strong>
           )}
         </div>
       )}

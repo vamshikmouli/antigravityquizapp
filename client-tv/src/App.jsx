@@ -18,6 +18,7 @@ import { ThemeProvider } from './context/ThemeContext'
 import ThemeToggle from './components/ThemeToggle'
 import { useWebSocket } from './hooks/useWebSocket'
 import AudioManager from './utils/AudioManager'
+import { DEFAULT_MUSIC } from './lib/defaultMusic'
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -146,17 +147,13 @@ function AppContent() {
   
   // Initialize Audio
   useEffect(() => {
-    if (!sessionData?.host?.musicTracks) return
+    if (!sessionData) return
 
-    const tracks = {}
-    if (sessionData.host.musicTracks) {
-      sessionData.host.musicTracks.forEach(track => {
-        tracks[track.type] = track.url
-      })
-      console.log('App: Music tracks found:', Object.keys(tracks));
-    } else {
-      console.log('App: No music tracks in host object');
-    }
+    // Built-in music for every stage, replaced by any track the host uploaded.
+    const tracks = { ...DEFAULT_MUSIC }
+    ;(sessionData.host?.musicTracks || []).forEach(track => {
+      if (track?.url) tracks[track.type] = track.url
+    })
 
     audioManager.current.loadTracks(tracks)
     audioManager.current.setEnabled(sessionData.musicEnabled)

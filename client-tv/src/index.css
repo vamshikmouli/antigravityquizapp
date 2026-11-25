@@ -85,7 +85,7 @@ body[data-theme='light'] {
 }
 
 body {
-  font-family: 'Outfit', 'Inter', -apple-system, sans-serif;
+  font-family: 'Inter', 'Noto Sans Kannada', system-ui, -apple-system, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
   background: var(--color-bg);
   background-image: var(--bg-gradient);

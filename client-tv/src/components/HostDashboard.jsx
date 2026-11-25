@@ -1,18 +1,19 @@
+import Icon from './common/Icon';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const ACTIONS = [
   {
-    to: '/create-session', icon: '🚀', color: '#34d399', title: 'Launch a quiz',
+    to: '/create-session', icon: <Icon name="play" />, color: '#34d399', title: 'Launch a quiz',
     text: 'Pick a quiz and put it on the big screen. Students join from their phones with a code.', cta: 'Start a session'
   },
   {
-    to: '/quizzes', icon: '📚', color: '#818cf8', title: 'Quizzes & questions',
+    to: '/quizzes', icon: <Icon name="book" />, color: '#818cf8', title: 'Quizzes & questions',
     text: 'Create quizzes, add rounds and questions by hand or let AI plan a whole quiz for you.', cta: 'Manage quizzes'
   },
   {
-    to: '/music-settings', icon: '🎵', color: '#f472b6', title: 'Music & sound',
+    to: '/music-settings', icon: <Icon name="music" />, color: '#f472b6', title: 'Music & sound',
     text: 'Upload background tracks for questions, answers and the results screens.', cta: 'Manage music'
   }
 ];
@@ -42,7 +43,7 @@ function HostDashboard() {
   return (
     <div className="ds-page">
       <header className="ds-topbar">
-        <span className="ds-brand-icon">🎯</span>
+        <span className="ds-brand-icon"><Icon name="sparkles" /></span>
         <div className="ds-topbar-title">
           <small>Quiz host</small>
           <h1>Dashboard</h1>
@@ -55,7 +56,7 @@ function HostDashboard() {
               <span className="ds-muted" style={{ fontSize: 12 }}>{user?.email}</span>
             </div>
           </div>
-          <button type="button" onClick={logout} className="ds-btn ds-btn-ghost ds-btn-sm">↪ Log out</button>
+          <button type="button" onClick={logout} className="ds-btn ds-btn-ghost ds-btn-sm"><Icon name="logout" /> Log out</button>
         </div>
       </header>
 
@@ -68,7 +69,7 @@ function HostDashboard() {
           <div className="ds-stat"><b>{quizzes ? totalQuestions : '–'}</b><small>Questions</small></div>
           <div className="ds-row" style={{ marginLeft: 'auto', alignSelf: 'center' }}>
             <Link to="/quizzes" className="ds-btn">＋ New quiz</Link>
-            <Link to="/create-session" className="ds-btn ds-btn-primary">🚀 Launch a quiz</Link>
+            <Link to="/create-session" className="ds-btn ds-btn-primary"><Icon name="play" /> Launch a quiz</Link>
           </div>
         </div>
       </section>
@@ -97,7 +98,7 @@ function HostDashboard() {
       )}
       {quizzes?.length === 0 && (
         <div className="ds-empty">
-          <span className="ds-tile lg grad">✨</span>
+          <span className="ds-tile lg grad"><Icon name="sparkles" /></span>
           <h3>No quizzes yet</h3>
           <p>Create your first quiz — describe it in one sentence and let AI build the rounds.</p>
           <Link to="/quizzes" className="ds-btn ds-btn-primary">Create a quiz</Link>
