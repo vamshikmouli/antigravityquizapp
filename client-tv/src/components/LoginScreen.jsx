@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import GoogleSignInButton from './GoogleSignInButton';
-import './Auth.css'; // Shared styles
+import AuthLayout from './AuthLayout';
 
 function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -28,46 +28,23 @@ function LoginScreen() {
   };
 
   return (
-    <div className="auth-container fade-in">
-      <div className="auth-card">
-        <h1>Welcome Back</h1>
-        <p className="subtitle">Login to manage your quizzes</p>
-
-        {error && <div className="error-message">{error}</div>}
-
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label>Email</label>
-            <input 
-              type="email" 
-              value={email} 
-              onChange={(e) => setEmail(e.target.value)} 
-              required 
-            />
-          </div>
-          
-          <div className="form-group">
-            <label>Password</label>
-            <input 
-              type="password" 
-              value={password} 
-              onChange={(e) => setPassword(e.target.value)} 
-              required 
-            />
-          </div>
-
-          <button type="submit" disabled={isLoading} className="primary-btn">
-            {isLoading ? 'Logging in...' : 'Login'}
-          </button>
-        </form>
-
-        <GoogleSignInButton onError={setError} />
-
-        <div className="auth-footer">
-          Don't have an account? <Link to="/register">Register</Link>
-        </div>
-      </div>
-    </div>
+    <AuthLayout title="Welcome back" subtitle="Sign in to manage and run your quizzes." footer={<>New here? <Link to="/register" className="ds-link">Create an account</Link></>}>
+      {error && <div className="ds-alert bad" style={{ marginBottom: 16 }}>⚠️ {error}</div>}
+      <form onSubmit={handleSubmit}>
+        <label className="ds-field">
+          <span className="ds-label">Email</span>
+          <input className="ds-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" placeholder="you@school.edu" required />
+        </label>
+        <label className="ds-field">
+          <span className="ds-label">Password</span>
+          <input className="ds-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" placeholder="••••••••" required />
+        </label>
+        <button type="submit" disabled={isLoading} className="ds-btn ds-btn-primary ds-btn-lg ds-btn-block" style={{ marginTop: 6 }}>
+          {isLoading ? 'Signing in…' : 'Sign in'}
+        </button>
+      </form>
+      <GoogleSignInButton onError={setError} />
+    </AuthLayout>
   );
 }
 

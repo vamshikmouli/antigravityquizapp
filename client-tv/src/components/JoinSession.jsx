@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import './JoinSession.css'
 
 function JoinSession({ socket, onJoinSuccess }) {
   const [code, setCode] = useState('')
@@ -62,13 +61,13 @@ function JoinSession({ socket, onJoinSuccess }) {
   }
   
   return (
-    <div className="join-session-tv fade-in">
-      <div className="join-content">
-        <div className="tv-icon">📺</div>
-        <h1>Quiz Display</h1>
-        <p className="subtitle">Enter the session code to display the quiz</p>
-        
-        <form onSubmit={handleSubmit} className="join-form-tv">
+    <div className="ds-tvjoin">
+      <div className="ds-tvjoin-card">
+        <span className="ds-brand-icon" style={{ width: 64, height: 64, fontSize: 30, borderRadius: 20, margin: '0 auto' }}>📺</span>
+        <h1>Show a quiz on <span className="ds-grad-text">this screen</span></h1>
+        <p className="ds-dim">Enter the session code from the host’s launch page.</p>
+
+        <form onSubmit={handleSubmit}>
           <input
             type="text"
             placeholder="ABC-123"
@@ -77,38 +76,20 @@ function JoinSession({ socket, onJoinSuccess }) {
             maxLength={7}
             disabled={loading}
             autoComplete="off"
-            className="code-input-tv"
+            className="ds-code-input"
+            aria-label="Session code"
             autoFocus
           />
-
-            {error && (
-            <div className="error-message-tv">
-              {error}
-            </div>
-          )}
-          
-          <button
-            type="submit"
-            className="join-button-tv"
-            disabled={loading || !code}
-          >
-            {loading ? (
-              <div className="flex items-center justify-center gap-md">
-                <div className="spinner"></div>
-                <span>Connecting...</span>
-              </div>
-            ) : (
-              'Connect to Display'
-            )}
+          {error && <div className="ds-alert bad" style={{ marginTop: 12 }}>⚠️ {error}</div>}
+          <button type="submit" className="ds-btn ds-btn-primary ds-btn-lg ds-btn-block" style={{ marginTop: 16 }} disabled={loading || !code}>
+            {loading ? <><span className="ds-spinner" /> Connecting…</> : 'Connect to display'}
           </button>
         </form>
-        
-        <div className="join-footer-tv">
-          {user ? (
-            <p>Welcome back, {user.name}! <Link to="/dashboard" style={{ color: 'var(--color-primary)', fontWeight: 'bold', marginLeft: '5px' }}>Go to Dashboard →</Link></p>
-          ) : (
-            <p>Are you a teacher? <Link to="/login" style={{ color: 'var(--color-primary)', fontWeight: 'bold' }}>Login here</Link></p>
-          )}
+
+        <div className="ds-auth-footer">
+          {user
+            ? <>Signed in as {user.name}. <Link to="/dashboard" className="ds-link">Go to dashboard →</Link></>
+            : <>Are you the host? <Link to="/login" className="ds-link">Sign in</Link></>}
         </div>
       </div>
     </div>

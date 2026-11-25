@@ -1,14 +1,7 @@
 import { Fragment, useState } from 'react';
 
-export const QUESTION_TYPES = [
-  { value: 'MULTIPLE_CHOICE', label: 'Multiple Choice', icon: '🔤' },
-  { value: 'TRUE_FALSE', label: 'True / False', icon: '✅' },
-  { value: 'BUZZER', label: 'Buzzer (options)', icon: '🔔' },
-  { value: 'ORAL_BUZZER', label: 'Oral Buzzer', icon: '🎤' },
-  { value: 'SHORT_ANSWER', label: 'Short Answer', icon: '✍️' },
-  { value: 'ORAL_OPEN', label: 'Oral Open', icon: '💬' }
-];
-export const TYPE_INFO = Object.fromEntries(QUESTION_TYPES.map((t) => [t.value, t]));
+import { QUESTION_TYPES, TYPE_INFO } from '../lib/questionTypes';
+export { QUESTION_TYPES, TYPE_INFO };
 const DIFFICULTIES = ['easy', 'medium', 'hard'];
 const MAX_TOTAL = 60;
 const LETTERS = 'ABCDEFGH';

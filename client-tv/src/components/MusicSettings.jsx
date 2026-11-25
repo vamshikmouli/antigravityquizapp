@@ -1,14 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
-import './QuestionManager.css';
 
 const MUSIC_TYPES = [
-  { key: 'QUESTION', label: 'Question Music', description: 'Plays when a question is displayed', icon: '❓' },
-  { key: 'OPTIONS', label: 'Options Music', description: 'Plays when showing answer options', icon: '📝' },
-  { key: 'ANSWER', label: 'Answer Music', description: 'Plays when revealing the correct answer', icon: '✅' },
-  { key: 'ROUND_RESULTS', label: 'Round Results Music', description: 'Plays during round leaderboard', icon: '🏆' },
-  { key: 'FINAL_RESULTS', label: 'Final Results Music', description: 'Plays during final results', icon: '🎉' }
+  { key: 'QUESTION', label: 'Question', description: 'While a question is on screen', icon: '❓', color: '#818cf8' },
+  { key: 'OPTIONS', label: 'Answer options', description: 'While options are shown', icon: '📝', color: '#38bdf8' },
+  { key: 'ANSWER', label: 'Answer reveal', description: 'When the correct answer appears', icon: '✅', color: '#34d399' },
+  { key: 'ROUND_RESULTS', label: 'Round results', description: 'During the round leaderboard', icon: '🏆', color: '#fbbf24' },
+  { key: 'FINAL_RESULTS', label: 'Final results', description: 'During the winners screen', icon: '🎉', color: '#f472b6' }
 ];
 
 function MusicSettings() {
@@ -134,135 +133,70 @@ function MusicSettings() {
     return tracks.find(t => t.type === type);
   };
 
+  const uploaded = MUSIC_TYPES.filter(({ key }) => getTrackForType(key)).length;
+
   return (
-    <div className="dashboard-container fade-in">
-      <header className="dashboard-header">
-        <div className="header-info" style={{ display: 'flex', alignItems: 'center' }}>
-          <Link to="/dashboard" className="top-left-back-btn">← Back</Link>
-          <h1>🎵 Music Settings</h1>
+    <div className="ds-page narrow">
+      <header className="ds-topbar">
+        <Link to="/dashboard" className="ds-back" aria-label="Back">←</Link>
+        <div className="ds-topbar-title">
+          <small>Sound</small>
+          <h1>Music</h1>
+        </div>
+        <div className="ds-topbar-actions">
+          <span className={`ds-chip ${uploaded ? 'good' : ''}`}>{uploaded} of {MUSIC_TYPES.length} tracks</span>
         </div>
       </header>
 
-      <div className="content-section">
-        <p style={{ marginBottom: '30px', opacity: 0.8 }}>
-          Upload custom background music for different stages of your quiz. Music will play on the TV display only.
-        </p>
+      <p className="ds-dim" style={{ margin: '0 0 18px' }}>
+        Background tracks for each stage of the quiz. They play on the big screen only — never on students’ phones — and loop automatically.
+      </p>
 
-        <div style={{ 
-          display: 'grid', 
-          gap: '20px',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(450px, 1fr))'
-        }}>
-          {MUSIC_TYPES.map(({ key, label, description, icon }) => {
+      {loading && <div style={{ display: 'grid', gap: 10 }}>{[0, 1, 2].map((k) => <div key={k} className="ds-skeleton" style={{ height: 76 }} />)}</div>}
+
+      {!loading && (
+        <div style={{ display: 'grid', gap: 10 }}>
+          {MUSIC_TYPES.map(({ key, label, description, icon, color }) => {
             const track = getTrackForType(key);
             const isUploading = uploading === key;
             const isPlaying = playingTrack === key;
-
             return (
-              <div
-                key={key}
-                className="card-glass"
-                style={{
-                  padding: '16px 20px',
-                  borderRadius: '16px',
-                  border: track ? '2px solid var(--color-success)' : '1px solid var(--color-border)',
-                  background: 'rgba(255,255,255,0.03)'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '20px' }}>
-                  <div style={{ fontSize: '48px' }}>{icon}</div>
-                  
-                  <div style={{ flex: 1 }}>
-                    <h3 style={{ marginBottom: '4px', fontSize: '1.2rem' }}>{label}</h3>
-                    <p style={{ opacity: 0.7, marginBottom: '12px', fontSize: '0.9rem' }}>{description}</p>
-
-                    {track ? (
-                      <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-                        <span style={{ 
-                          padding: '6px 12px', 
-                          background: 'rgba(16, 185, 129, 0.1)', 
-                          borderRadius: '8px',
-                          color: 'var(--color-success)',
-                          fontSize: '14px'
-                        }}>
-                          ✓ Uploaded
-                        </span>
-                        
-                        <button
-                          onClick={() => playPreview(key, track.url)}
-                          className="secondary-btn"
-                          style={{ padding: '8px 16px', fontSize: '14px' }}
-                        >
-                          {isPlaying ? '⏸️ Stop' : '▶️ Preview'}
-                        </button>
-
-                        <button
-                          onClick={() => fileInputRefs.current[key]?.click()}
-                          className="secondary-btn"
-                          style={{ padding: '8px 16px', fontSize: '14px' }}
-                        >
-                          🔄 Replace
-                        </button>
-
-                        <button
-                          onClick={() => handleDelete(track.id, key)}
-                          className="secondary-btn"
-                          style={{ 
-                            padding: '8px 16px', 
-                            fontSize: '14px',
-                            background: 'rgba(244, 63, 94, 0.1)',
-                            color: 'var(--color-error)'
-                          }}
-                        >
-                          🗑️ Delete
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => fileInputRefs.current[key]?.click()}
-                        disabled={isUploading}
-                        className="primary-btn"
-                        style={{ 
-                          padding: '12px 24px',
-                          background: isUploading ? '#555' : 'var(--grad-primary)'
-                        }}
-                      >
-                        {isUploading ? '⏳ Uploading...' : '📤 Upload Music'}
-                      </button>
-                    )}
-
-                    <input
-                      ref={el => fileInputRefs.current[key] = el}
-                      type="file"
-                      accept="audio/mpeg,audio/mp3,audio/ogg,audio/wav"
-                      style={{ display: 'none' }}
-                      onChange={(e) => handleFileSelect(key, e.target.files[0])}
-                    />
+              <div key={key} className="ds-card ms-row" style={{ '--c': color }}>
+                <span className="ds-tile">{icon}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="ds-row" style={{ gap: 8 }}>
+                    <h3 style={{ fontSize: 15.5 }}>{label}</h3>
+                    {track ? <span className="ds-chip good">✓ Uploaded</span> : <span className="ds-chip">Default</span>}
                   </div>
+                  <p>{description}</p>
                 </div>
+                <div className="ds-row" style={{ gap: 6 }}>
+                  {track ? (
+                    <>
+                      <button type="button" onClick={() => playPreview(key, track.url)} className={`ds-btn ds-btn-sm ${isPlaying ? 'ds-btn-primary' : ''}`}>
+                        {isPlaying ? '⏸ Stop' : '▶ Play'}
+                      </button>
+                      <button type="button" onClick={() => fileInputRefs.current[key]?.click()} className="ds-btn ds-btn-sm" disabled={isUploading}>
+                        {isUploading ? 'Uploading…' : 'Replace'}
+                      </button>
+                      <button type="button" onClick={() => handleDelete(track.id, key)} className="ds-icon-btn danger" title="Delete" aria-label={`Delete ${label} track`}>🗑️</button>
+                    </>
+                  ) : (
+                    <button type="button" onClick={() => fileInputRefs.current[key]?.click()} disabled={isUploading} className="ds-btn ds-btn-sm ds-btn-primary">
+                      {isUploading ? <><span className="ds-spinner" /> Uploading…</> : '⤴ Upload'}
+                    </button>
+                  )}
+                </div>
+                <input ref={(el) => (fileInputRefs.current[key] = el)} type="file" accept="audio/mpeg,audio/mp3,audio/ogg,audio/wav"
+                  style={{ display: 'none' }} onChange={(e) => handleFileSelect(key, e.target.files[0])} />
               </div>
             );
           })}
         </div>
+      )}
 
-        <div 
-          className="card-glass" 
-          style={{ 
-            marginTop: '40px', 
-            padding: '20px', 
-            borderRadius: '16px',
-            background: 'rgba(99, 102, 241, 0.05)'
-          }}
-        >
-          <h4 style={{ marginBottom: '12px' }}>💡 Tips</h4>
-          <ul style={{ paddingLeft: '20px', opacity: 0.8, lineHeight: '1.8' }}>
-            <li>Supported formats: MP3, OGG, WAV</li>
-            <li>Maximum file size: 10MB per track</li>
-            <li>Music will loop automatically during each stage</li>
-            <li>You can control volume and mute during the quiz</li>
-            <li>Music plays only on the TV display, not on student devices</li>
-          </ul>
-        </div>
+      <div className="ds-alert info" style={{ marginTop: 20, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <span>💡</span><span>MP3, OGG or WAV · up to 10 MB per track · volume and mute are on the big screen during the quiz.</span>
       </div>
     </div>
   );
