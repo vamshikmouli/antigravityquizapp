@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { calculateScoreChange } from '../shared/utils.js';
+import { answersMatch } from './competition.js';
 
 const prisma = new PrismaClient();
 
@@ -18,7 +19,10 @@ export async function submitAnswer(participantId, questionId, answer, timeToAnsw
     }
     
     // Check if answer is correct
-    const isCorrect = answer === question.correctAnswer;
+    // Typed answers ignore case, spacing and punctuation; option answers must match exactly.
+    const isCorrect = question.type === 'SHORT_ANSWER'
+      ? answersMatch(answer, question.correctAnswer)
+      : answer === question.correctAnswer;
     
     // Calculate points
     const points = calculateScoreChange(isCorrect, question.points, question.negativePoints);

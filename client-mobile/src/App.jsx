@@ -25,7 +25,8 @@ function App() {
     localStorage.setItem('quiz-session', JSON.stringify({
       code: session.code,
       participantId: participant.id,
-      name: participant.name
+      name: participant.name,
+      rejoinToken: participant.rejoinToken
     }))
 
     if (currentGameState) {
@@ -60,7 +61,7 @@ function App() {
     const savedSession = localStorage.getItem('quiz-session')
     if (savedSession) {
       try {
-        const { code, participantId, name } = JSON.parse(savedSession)
+        const { code, participantId, name, rejoinToken } = JSON.parse(savedSession)
         
         // Only emit if we haven't already joined with this specific socket ID
         // or if we need to re-establish the session after a disconnect
@@ -70,6 +71,7 @@ function App() {
           code,
           participantId,
           name,
+          rejoinToken,
           role: 'student'
         })
         
@@ -80,6 +82,10 @@ function App() {
         }
         
         socket.once('session-joined', handleRejoin)
+        // Rejoin refused (quiz over, seat no longer valid): forget it and show the join screen.
+        socket.once('error', (e) => {
+          if (/already started|already ended|not found|name/i.test(e?.message || '')) localStorage.removeItem('quiz-session')
+        })
       } catch (err) {
         console.error('Failed to parse saved session:', err)
         localStorage.removeItem('quiz-session')
