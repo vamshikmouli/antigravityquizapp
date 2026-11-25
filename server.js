@@ -32,7 +32,7 @@ import fs from 'fs';
 
 // Import constants
 import { SOCKET_EVENTS, SESSION_STATUS, QUESTION_TYPES } from './shared/constants.js';
-import { calculateRankings, sanitizeStudentName } from './shared/utils.js';
+import { calculateRankings, sanitizeStudentName, isValidQuestion } from './shared/utils.js';
 
 // Load environment variables
 dotenv.config();
@@ -132,6 +132,12 @@ app.use(express.json());
 
 // Store active sessions and their socket rooms
 const activeSessions = new Map();
+
+// Questions may only be added to the caller's own quizzes.
+async function ownsQuiz(user, quizId) {
+  if (!quizId) return true; // unassigned question bank entry
+  return Boolean(await prisma.quiz.findFirst({ where: { id: quizId, ...ownerScope(user) }, select: { id: true } }));
+}
 
 // Competition (team) mode: turns, passes, clue rounds, elimination.
 const competition = createCompetition({ io, prisma, getBuzzerManager, startBuzzerRound, activeSessions });
@@ -237,6 +243,10 @@ app.post('/api/questions/import', authenticateToken, excelUpload.single('file'),
     
     const { quizId } = req.body;
     const sanitizedQuizId = (quizId === 'null' || quizId === 'undefined') ? null : quizId;
+    if (!(await ownsQuiz(req.user, sanitizedQuizId))) {
+      fs.unlinkSync(req.file.path);
+      return res.status(404).json({ error: 'Quiz not found or unauthorized' });
+    }
     
     const result = await importController.importQuestions(req.file.path, req.user.id, sanitizedQuizId, tenantStamp(req.user));
     
@@ -402,6 +412,12 @@ app.get('/api/questions', authenticateToken, async (req, res) => {
 app.post('/api/questions', authenticateToken, async (req, res) => {
   try {
     const questionData = { ...req.body, ownerId: req.user.id, ...tenantStamp(req.user) };
+    if (!isValidQuestion(questionData)) {
+      return res.status(400).json({ error: 'Invalid question: check the type, options, correct answer, points and time limit' });
+    }
+    if (!(await ownsQuiz(req.user, questionData.quizId))) {
+      return res.status(404).json({ error: 'Quiz not found or unauthorized' });
+    }
     const question = await questionController.createQuestion(questionData);
     res.json(question);
   } catch (error) {
@@ -423,6 +439,12 @@ app.put('/api/questions/:id', authenticateToken, async (req, res) => {
 
     // Never let the client move a question to another owner/tenant via the body.
     const { ownerId, tenantId, schoolId, ...safeBody } = req.body || {};
+    if (!isValidQuestion(safeBody)) {
+      return res.status(400).json({ error: 'Invalid question: check the type, options, correct answer, points and time limit' });
+    }
+    if (safeBody.quizId !== undefined && !(await ownsQuiz(req.user, safeBody.quizId))) {
+      return res.status(404).json({ error: 'Quiz not found or unauthorized' });
+    }
     const question = await questionController.updateQuestion(req.params.id, safeBody);
     res.json(question);
   } catch (error) {
@@ -459,6 +481,12 @@ app.post('/api/questions/import-json', authenticateToken, async (req, res) => {
 
     if (!Array.isArray(questions)) {
       return res.status(400).json({ error: 'Questions must be an array' });
+    }
+
+    for (const quizId of new Set(questions.map((q) => q?.quizId).filter(Boolean))) {
+      if (!(await ownsQuiz(req.user, quizId))) {
+        return res.status(404).json({ error: 'Quiz not found or unauthorized' });
+      }
     }
 
     // Stamp ownership + tenant so imported questions belong to the caller.
@@ -688,10 +716,31 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
         return;
       }
       
-      // Check if session allows late join
-      if (session.status === SESSION_STATUS.ACTIVE && !session.allowLateJoin && role === 'student' && !participantId) {
-        socket.emit(SOCKET_EVENTS.ERROR, { message: 'Session has already started' });
-        return;
+      // Students rejoining (phone refresh / reconnect) must present the rejoin
+      // token issued at their first join. A bare participant id is NOT enough:
+      // ids are visible to every phone, so that would let anyone take over a seat.
+      let rejoinId = null;
+      if (role === 'student' && participantId && data.rejoinToken) {
+        try {
+          const t = jwt.verify(data.rejoinToken, JWT_SECRET);
+          if (t.pid === participantId && t.sid === session.id) rejoinId = participantId;
+        } catch { /* invalid or expired: treated as a new join below */ }
+      }
+
+      if (role === 'student' && !rejoinId) {
+        if (session.status === SESSION_STATUS.COMPLETED) {
+          socket.emit(SOCKET_EVENTS.ERROR, { message: 'This quiz has already ended' });
+          return;
+        }
+        // Check if session allows late join
+        if (session.status === SESSION_STATUS.ACTIVE && !session.allowLateJoin) {
+          socket.emit(SOCKET_EVENTS.ERROR, { message: 'Session has already started' });
+          return;
+        }
+        if (!sanitizeStudentName(String(name ?? ''))) {
+          socket.emit(SOCKET_EVENTS.ERROR, { message: 'Please enter your name' });
+          return;
+        }
       }
 
       // SECURITY: host/display roles grant control over the session, so they must
@@ -731,9 +780,9 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
         try {
           let participant;
           
-          if (participantId) {
-            // Try rejoining with existing ID
-            participant = await sessionController.getParticipantById(participantId);
+          if (rejoinId) {
+            // Rejoining with a verified rejoin token
+            participant = await sessionController.getParticipantById(rejoinId);
             
             // Verify participant belongs to this session
             if (!participant || participant.sessionId !== session.id) {
@@ -743,7 +792,7 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
           }
           
           if (!participant) {
-            const sanitizedName = sanitizeStudentName(name);
+            const sanitizedName = sanitizeStudentName(String(name ?? ''));
             participant = await sessionController.addParticipant(session.id, sanitizedName);
           }
           
@@ -800,7 +849,8 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
               name: participant.name,
               score: participant.score,
               eliminated: Boolean(participant.eliminatedAt),
-              eliminatedRound: participant.eliminatedRound ?? null
+              eliminatedRound: participant.eliminatedRound ?? null,
+              rejoinToken: jwt.sign({ pid: participant.id, sid: session.id }, JWT_SECRET, { expiresIn: '24h' })
             },
             mode: await competition.mode(session.id),
             currentGameState
@@ -1278,6 +1328,15 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
       }
       // Competition mode: directed turns are judged here (turn order, passes).
       if (await competition.onSubmitAnswer(socket, data)) return;
+
+      // Buzzer question in progress: only the player who won the buzz may answer.
+      // (If the winner times out the buzzer resets to idle and it reopens to all.)
+      const bmA = getBuzzerManager(sessionId);
+      if (bmA.questionId === questionId && bmA.phase !== 'idle' &&
+          !(bmA.locked && bmA.firstBuzzer?.participantId === participantId)) {
+        socket.emit(SOCKET_EVENTS.ERROR, { message: 'Only the player who buzzed first can answer' });
+        return;
+      }
       
       // Submit answer
       const result = await scoringController.submitAnswer(
