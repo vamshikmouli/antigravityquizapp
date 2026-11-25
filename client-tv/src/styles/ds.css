@@ -605,3 +605,10 @@ body:has(.ds-auth) .tv-container, body:has(.ds-tvjoin) .tv-container { padding: 
 .ds-code-input::placeholder { color: var(--ds-muted); opacity: 0.45; }
 .ds-code-input:focus { outline: none; border-color: var(--ds-accent); box-shadow: 0 0 0 5px var(--ds-accent-soft); }
 @media (max-width: 640px) { .ds-tvjoin-card { padding: 28px 20px; } .ds-code-input { font-size: 30px; letter-spacing: 6px; } }
+
+@media (max-width: 640px) {
+  body .tv-status-pill { padding: 4px 10px 4px 4px !important; gap: 6px !important; opacity: 0.9; }
+  body .tv-status-pill > div { font-size: 0 !important; gap: 0 !important; padding-left: 8px !important; }
+  .ds-tabs { flex-wrap: nowrap; max-width: 100%; overflow-x: auto; scrollbar-width: none; border-radius: 16px; }
+  .ds-tabs::-webkit-scrollbar { display: none; }
+}

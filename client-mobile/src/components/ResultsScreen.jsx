@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import './ResultsScreen.css'
 
 function ResultsScreen({ socket, participantData }) {
   const [analytics, setAnalytics] = useState(null)
@@ -51,11 +50,9 @@ function ResultsScreen({ socket, participantData }) {
   
   if (!analytics || !myStats) {
     return (
-      <div className="results-screen">
-        <div className="loading-results">
-          <div className="spinner"></div>
-          <p>Calculating final results...</p>
-        </div>
+      <div className="ph-page ph-center">
+        <span className="ds-spinner" style={{ width: 28, height: 28 }} />
+        <p className="ds-dim">Calculating final results…</p>
       </div>
     )
   }
@@ -76,81 +73,42 @@ function ResultsScreen({ socket, participantData }) {
     return 'Good effort! Thanks for playing!'
   }
   
+  const score = myStats.score ?? myStats.totalScore ?? 0
+
   return (
-    <div className="results-screen fade-in">
-      <div className="results-header">
-        <h1>Quiz Complete!</h1>
-        <p className="subtitle">Here's how you performed</p>
+    <div className="ph-page ph-results">
+      <div className="ph-hero">
+        <div className="ds-kicker">Quiz complete</div>
+        <div className="ph-rank">{getRankEmoji(myStats.rank)}<b>#{myStats.rank}</b></div>
+        <h1>{getRankMessage(myStats.rank)}</h1>
       </div>
-      
-      <div className="my-results card-glass">
-        <div className="rank-display">
-          <div className="rank-emoji">{getRankEmoji(myStats.rank)}</div>
-          <div className="rank-number">#{myStats.rank}</div>
-          <div className="rank-message">{getRankMessage(myStats.rank)}</div>
-        </div>
-        
-        <div className="stats-grid">
-          <div className="stat-item">
-            <div className="stat-value">{myStats.score || myStats.totalScore}</div>
-            <div className="stat-label">Total Score</div>
-          </div>
-          <div className="stat-item">
-            <div className="stat-value">{myStats.buzzerWins}</div>
-            <div className="stat-label">Buzzer Wins</div>
-          </div>
-        </div>
+
+      <div className="ph-stats">
+        <div className="ds-stat"><b>{score}</b><small>Your score</small></div>
+        <div className="ds-stat"><b>{myStats.buzzerWins || 0}</b><small>Buzzer wins</small></div>
+        <div className="ds-stat"><b>{analytics.totalStudents}</b><small>Players</small></div>
       </div>
-      
-      <div className="leaderboard-section">
-        <h2>Global Leaderboard</h2>
-        <div className="leaderboard">
-          {analytics.topPerformers.slice(0, 10).map((performer, index) => (
-            <div 
-              key={index}
-              className={`leaderboard-item ${performer.name === participantData.name ? 'highlight' : ''}`}
-              style={{ animationDelay: `${index * 50}ms` }}
-            >
-              <div className="rank-badge">
-                {index < 3 ? getRankEmoji(index + 1) : `#${index + 1}`}
+
+      <div className="ph-card">
+        <strong style={{ display: 'block', marginBottom: 10, fontSize: 15 }}>Leaderboard</strong>
+        <div style={{ display: 'grid', gap: 6 }}>
+          {analytics.topPerformers.slice(0, 10).map((performer, index) => {
+            const mine = performer.name === participantData.name
+            return (
+              <div key={index} className={`ph-lb-row ${mine ? 'me' : ''}`} style={{ animationDelay: `${index * 40}ms` }}>
+                <span className="ph-lb-rank">{index < 3 ? getRankEmoji(index + 1) : index + 1}</span>
+                <span className="ph-lb-name">{performer.name}{mine && <em>you</em>}</span>
+                <span className="ph-lb-score">{performer.score}</span>
               </div>
-              <div className="performer-name">
-                {performer.name}
-                {performer.name === participantData.name && <span className="you-tag"> (You)</span>}
-              </div>
-              <div className="performer-score">{performer.score} pts</div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
-      
-      <div className="overall-stats">
-        <h3>Summary</h3>
-        <div className="stats-row">
-          <div className="stat-box card-glass">
-            <div className="stat-icon">👥</div>
-            <div className="stat-number">{analytics.totalStudents}</div>
-            <div className="stat-text">Students</div>
-          </div>
-          <div className="stat-box card-glass">
-            <div className="stat-icon">📊</div>
-            <div className="stat-number">{Math.round(analytics.averageScore)}</div>
-            <div className="stat-text">Avg Score</div>
-          </div>
-        </div>
-      </div>
-      
-      <div className="results-footer">
-        <button 
-          onClick={() => {
-            localStorage.removeItem('quiz-session');
-            window.location.href = '/';
-          }} 
-          className="play-again-btn"
-        >
-          Join Another Quiz
-        </button>
-      </div>
+
+      <button type="button" className="ds-btn ds-btn-primary ds-btn-lg ds-btn-block ph-big-btn"
+        onClick={() => { localStorage.removeItem('quiz-session'); window.location.href = '/'; }}>
+        Join another quiz
+      </button>
     </div>
   )
 }

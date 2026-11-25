@@ -1,49 +1,37 @@
-import './Leaderboard.css'
+const COLORS = ['#818cf8', '#f472b6', '#34d399', '#fbbf24', '#38bdf8', '#c084fc', '#fb923c']
 
 function Leaderboard({ leaderboard, buzzerWinner, variant = 'standard' }) {
-  const topTen = leaderboard.slice(0, 10)
-  
-  const getRankEmoji = (rank) => {
-    if (rank === 1) return '🥇'
-    if (rank === 2) return '🥈'
-    if (rank === 3) return '🥉'
-    return null
-  }
-  
+  const top = leaderboard.slice(0, 10)
+  const best = Math.max(1, ...top.map((p) => p.score || 0))
+  const medal = (rank) => (rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : null)
+
   return (
-    <div className={`leaderboard-panel card ${variant === 'large' ? 'large-view' : ''}`}>
-      <div className="leaderboard-header">
-        <h3>🏆 Live Leaderboard</h3>
+    <div className={`gm-board ${variant === 'large' ? 'large' : ''}`}>
+      <div className="gm-board-head">
+        <span>🏆</span>
+        <h3>Leaderboard</h3>
+        {top.length > 0 && <span className="gm-board-n">{leaderboard.length}</span>}
       </div>
-      
-      <div className="leaderboard-list">
-        {topTen.length === 0 ? (
-          <div className="no-scores">
-            <p>No scores yet</p>
-          </div>
+
+      <div className="gm-board-list">
+        {top.length === 0 ? (
+          <div className="gm-board-empty">Scores appear after the first answer</div>
         ) : (
-          topTen.map((participant, index) => {
-            const isBuzzerWinner = buzzerWinner && participant.id === buzzerWinner.participantId
-            const rankEmoji = getRankEmoji(participant.rank)
-            
+          top.map((p, index) => {
+            const isBuzz = buzzerWinner && p.id === buzzerWinner.participantId
             return (
-              <div
-                key={participant.id}
-                className={`leaderboard-item ${isBuzzerWinner ? 'buzzer-highlight' : ''}`}
-                style={{ animationDelay: `${index * 50}ms` }}
-              >
-                <div className="rank-display">
-                  {rankEmoji || `#${participant.rank}`}
+              <div key={p.id} className={`gm-row r${p.rank} ${isBuzz ? 'buzz' : ''}`}
+                style={{ animationDelay: `${index * 40}ms`, '--c': COLORS[index % COLORS.length] }}>
+                <span className="gm-rank">{medal(p.rank) || p.rank}</span>
+                <span className="gm-avatar sm">{p.name.charAt(0).toUpperCase()}</span>
+                <div className="gm-row-main">
+                  <div className="gm-row-name">
+                    {p.name}
+                    {p.buzzerWins > 0 && <span className="gm-buzz-wins" title="Buzzer wins">🔔 {p.buzzerWins}</span>}
+                  </div>
+                  <div className="gm-bar"><i style={{ width: `${Math.max(4, ((p.score || 0) / best) * 100)}%` }} /></div>
                 </div>
-                <div className="participant-info">
-                  <div className="participant-name-lb">{participant.name}</div>
-                  {participant.buzzerWins > 0 && (
-                    <div className="buzzer-wins">
-                      🔴 {participant.buzzerWins}
-                    </div>
-                  )}
-                </div>
-                <div className="score-display">{participant.score}</div>
+                <span className="gm-score">{p.score}</span>
               </div>
             )
           })

@@ -5,7 +5,7 @@ const ThemeToggle = ({ style }) => {
   const { theme, toggleTheme } = useTheme();
 
   return (
-    <button 
+    <button type="button" 
       onClick={toggleTheme}
       style={{
         background: 'rgba(255, 255, 255, 0.1)',

@@ -118,24 +118,9 @@ function App() {
     <BrowserRouter>
       <div className="container">
         {/* Status Bar */}
-        <div style={{ 
-          position: 'fixed', 
-          top: '10px', 
-          right: '10px', 
-          zIndex: 1000,
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          padding: '6px 12px',
-          background: 'rgba(0,0,0,0.4)',
-          backdropFilter: 'blur(8px)',
-          borderRadius: '24px',
-          fontSize: '12px',
-          color: '#fff',
-          border: '1px solid rgba(255,255,255,0.1)'
-        }}>
+        <div className="ph-status">
           <ThemeToggle style={{ width: '24px', height: '24px', fontSize: '0.8rem', background: 'none', border: 'none', padding: 0 }} />
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', borderLeft: '1px solid rgba(255,255,255,0.2)', paddingLeft: '10px' }}>
+          <div className="ph-status-conn">
             <span className={`status-dot ${connected ? 'connected' : 'disconnected'}`}></span>
             {connected ? 'Connected' : 'Disconnected'}
           </div>

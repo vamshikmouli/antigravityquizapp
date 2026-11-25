@@ -1,6 +1,5 @@
 import React, { useEffect } from 'react';
 import ResultsTable from './ResultsTable';
-import './FinalResultsDisplay.css';
 
 const FinalResultsDisplay = ({ analytics, sessionCode, audioManager, onClose }) => {
   useEffect(() => {
@@ -12,62 +11,43 @@ const FinalResultsDisplay = ({ analytics, sessionCode, audioManager, onClose }) 
   const { detailedResults, totalStudents, averageScore } = analytics;
   const winners = detailedResults.slice(0, 3);
 
+  const place = (w, cls, medal) => w && (
+    <div className={`gm-podium-place ${cls}`}>
+      <div className="gm-podium-avatar">{w.name?.charAt(0).toUpperCase()}<span>{medal}</span></div>
+      <div className="gm-podium-name">{w.name}</div>
+      <div className="gm-podium-score">{w.totalScore} pts</div>
+      <div className="gm-podium-step">{cls === 'first' ? 1 : cls === 'second' ? 2 : 3}</div>
+    </div>
+  );
+
   return (
-    <div className="final-results-display fade-in">
-      <div className="results-overlay">
-        <header className="results-header">
-          <h1>🏆 Quiz Completed!</h1>
-          <div className="stat-pills">
-            <span className="stat-pill">👥 {totalStudents} Participants</span>
-            <span className="stat-pill">📈 Avg: {averageScore}</span>
-            <span className="stat-pill">🔑 {sessionCode}</span>
-          </div>
-        </header>
+    <div className="gm-final">
+      <div className="gm-confetti" aria-hidden="true">{Array.from({ length: 24 }, (_, i) => <i key={i} style={{ '--i': i }} />)}</div>
+      <header className="gm-final-head">
+        <div className="ds-kicker">Quiz complete</div>
+        <h1>And the winners <span className="ds-grad-text">are…</span></h1>
+        <div className="ds-row" style={{ justifyContent: 'center' }}>
+          <span className="ds-chip">👥 {totalStudents} players</span>
+          <span className="ds-chip">📈 Average {averageScore}</span>
+          <span className="ds-chip">🔑 {sessionCode}</span>
+        </div>
+      </header>
 
-        <main className="results-content">
-          <section className="podium-section">
-             {/* Small podium summary for top 3 */}
-             <div className="podium">
-                {winners[1] && (
-                  <div className="podium-place second">
-                    <div className="avatar">🥈</div>
-                    <div className="podium-name">{winners[1].name}</div>
-                    <div className="podium-score">{winners[1].totalScore}</div>
-                    <div className="bar"></div>
-                  </div>
-                )}
-                {winners[0] && (
-                  <div className="podium-place first">
-                    <div className="avatar">🥇</div>
-                    <div className="podium-name">{winners[0].name}</div>
-                    <div className="podium-score">{winners[0].totalScore}</div>
-                    <div className="bar"></div>
-                  </div>
-                )}
-                {winners[2] && (
-                  <div className="podium-place third">
-                    <div className="avatar">🥉</div>
-                    <div className="podium-name">{winners[2].name}</div>
-                    <div className="podium-score">{winners[2].totalScore}</div>
-                    <div className="bar"></div>
-                  </div>
-                )}
-             </div>
-          </section>
+      <section className="gm-podium">
+        {place(winners[1], 'second', '🥈')}
+        {place(winners[0], 'first', '🥇')}
+        {place(winners[2], 'third', '🥉')}
+      </section>
 
-          <section className="table-section">
-            <h2>Detailed Scorecard</h2>
-            <ResultsTable results={detailedResults} />
-          </section>
-        </main>
-        
-        <footer className="results-footer">
-           <p>Thank you for playing!</p>
-           <button onClick={onClose} className="back-dashboard-btn">
-             Back to Dashboard 🏠
-           </button>
-        </footer>
-      </div>
+      <section className="gm-scorecard">
+        <h2>Scorecard</h2>
+        <ResultsTable results={detailedResults} />
+      </section>
+
+      <footer className="gm-final-foot">
+        <span className="ds-muted">Thanks for playing! 🎉</span>
+        <button onClick={onClose} className="ds-btn ds-btn-primary">Back to dashboard</button>
+      </footer>
     </div>
   );
 };
