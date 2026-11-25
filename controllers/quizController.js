@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { ownerScope, tenantStamp } from './scope.js';
+import { ownerScope, hostScope, tenantStamp } from './scope.js';
 import { normalizeRoundSettings } from './competition.js';
 const prisma = new PrismaClient();
 
@@ -120,9 +120,21 @@ export async function deleteQuiz(req, res) {
       return res.status(404).json({ error: 'Quiz not found or unauthorized' });
     }
 
-    await prisma.quiz.delete({
-      where: { id }
-    });
+    // Played questions are still referenced by game records (session question
+    // lists, answers), which would block the cascade. Deleting a quiz deletes
+    // the games played with it too.
+    const questionIds = (await prisma.question.findMany({ where: { quizId: id }, select: { id: true } })).map((q) => q.id);
+    const sessionIds = (await prisma.session.findMany({
+      where: { OR: [{ quizId: id }, { questions: { some: { questionId: { in: questionIds } } } }], ...hostScope(req.user) },
+      select: { id: true }
+    })).map((s) => s.id);
+    await prisma.$transaction([
+      prisma.answer.deleteMany({ where: { questionId: { in: questionIds } } }),
+      prisma.sessionQuestion.deleteMany({ where: { questionId: { in: questionIds } } }),
+      prisma.analytics.deleteMany({ where: { sessionId: { in: sessionIds } } }),
+      prisma.session.deleteMany({ where: { id: { in: sessionIds } } }),
+      prisma.quiz.delete({ where: { id } })
+    ]);
 
     res.json({ message: 'Quiz deleted successfully' });
   } catch (error) {

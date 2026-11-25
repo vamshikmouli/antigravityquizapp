@@ -58,7 +58,8 @@ export function TurnToast({ result }) {
 export function TeamRoundRecap({ data, isHost, onEliminate, onNextRound, eliminatedNow = [] }) {
   const rows = data.summary?.rows || []
   const toppers = new Set(data.summary?.toppers || [])
-  const topper = rows.find((r) => toppers.has(r.id))
+  const topRows = rows.filter((r) => toppers.has(r.id))
+  const topper = topRows[0]
   const elim = data.elimination
   const outNow = new Set([...(elim?.done || []), ...eliminatedNow.map((g) => g.id)])
   const pending = elim && outNow.size < elim.count
@@ -73,7 +74,7 @@ export function TeamRoundRecap({ data, isHost, onEliminate, onNextRound, elimina
       {topper && (
         <div className="tm-topper-card">
           <span className="tm-topper-crown">🏆</span>
-          <div><small>Round topper</small><strong>{topper.name}</strong></div>
+          <div><small>{topRows.length > 1 ? 'Round toppers (tie)' : 'Round topper'}</small><strong>{topRows.map((r) => r.name).join(' & ')}</strong></div>
           <span className="tm-topper-pts">+{topper.roundPoints}</span>
         </div>
       )}

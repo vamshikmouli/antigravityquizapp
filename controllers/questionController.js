@@ -113,9 +113,12 @@ export async function updateQuestion(id, questionData) {
  */
 export async function deleteQuestion(id) {
   try {
-    await prisma.question.delete({
-      where: { id }
-    });
+    // Remove the game records that reference a played question first.
+    await prisma.$transaction([
+      prisma.answer.deleteMany({ where: { questionId: id } }),
+      prisma.sessionQuestion.deleteMany({ where: { questionId: id } }),
+      prisma.question.delete({ where: { id } })
+    ]);
   } catch (error) {
     console.error('Error deleting question:', error);
     throw new Error('Failed to delete question');

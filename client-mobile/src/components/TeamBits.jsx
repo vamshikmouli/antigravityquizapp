@@ -62,7 +62,8 @@ export function RoundEndCard({ data, me }) {
   const rows = data.summary?.rows || []
   const mine = rows.find((r) => r.id === me)
   const myRank = rows.filter((r) => !r.eliminated).findIndex((r) => r.id === me) + 1
-  const topper = rows.find((r) => data.summary?.toppers?.includes(r.id))
+  const topRows = rows.filter((r) => data.summary?.toppers?.includes(r.id))
+  const topper = topRows[0]
   const atRisk = data.elimination?.candidates?.includes(me) || data.elimination?.tied?.includes(me)
   return (
     <div className="tm-roundend">
@@ -78,7 +79,7 @@ export function RoundEndCard({ data, me }) {
       ) : (
         <h3>Round {data.round} complete</h3>
       )}
-      {topper && <div className="tm-topper">🏆 Round topper: <strong>{topper.name}</strong> (+{topper.roundPoints})</div>}
+      {topper && <div className="tm-topper">🏆 Round topper{topRows.length > 1 ? 's' : ''}: <strong>{topRows.map((r) => r.name).join(' & ')}</strong> (+{topper.roundPoints})</div>}
       {atRisk && <div className="tm-risk">⚠️ Lowest score — the host is deciding eliminations</div>}
       <p className="ds-dim" style={{ margin: 0 }}>Next round starts soon…</p>
     </div>
