@@ -593,3 +593,35 @@ body:has(.question-display-tv .global-music-controls.inline) .global-music-contr
 /* the clock freezes and fades once the answer is shown */
 .tv-timer.stopped { opacity: 0.55; }
 .tv-timer.stopped .tv-timer-bar { stroke: var(--ds-muted); }
+
+/* ---- Fix marks (host) -------------------------------------------------- */
+.question-display-tv .tv-fix-marks { font-size: 0.85em; padding: 0.6em 1em; border-radius: 0.75em; }
+.tv-recap-tools { position: fixed; top: 16px; right: 16px; z-index: 50; }
+.marks-modal { width: min(860px, calc(100vw - 32px)); font-size: 14px; }
+.marks-q { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 2px 0 14px; }
+.marks-table { display: grid; gap: 6px; }
+.marks-row {
+  display: grid; grid-template-columns: minmax(110px, 1.1fr) minmax(90px, 1fr) auto 84px 92px;
+  align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px;
+  background: var(--ds-panel); border: 1px solid var(--ds-border);
+}
+.marks-row.head { background: none; border: none; padding: 0 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ds-muted); }
+.marks-row.out { opacity: 0.7; }
+.marks-name { font-weight: 700; color: var(--ds-text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.marks-name em { font-style: normal; font-size: 10px; font-weight: 800; color: var(--ds-bad); margin-left: 6px; }
+.marks-ans { color: var(--ds-dim); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.marks-ans i { color: var(--ds-muted); }
+.marks-result { display: inline-flex; padding: 3px; gap: 2px; border-radius: 10px; background: var(--ds-panel-2); }
+.marks-result button {
+  display: inline-flex; align-items: center; gap: 5px; border: none; background: transparent; cursor: pointer;
+  padding: 6px 10px; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 650; color: var(--ds-dim);
+}
+.marks-result button.on.good { background: var(--ds-good); color: #fff; }
+.marks-result button.on.bad { background: var(--ds-bad); color: #fff; }
+.marks-pts { padding: 7px 8px !important; text-align: center; font-variant-numeric: tabular-nums; }
+.marks-save { display: flex; justify-content: flex-end; }
+@media (max-width: 720px) {
+  .marks-row { grid-template-columns: 1fr auto; }
+  .marks-row.head { display: none; }
+  .marks-ans { grid-column: 1 / -1; order: 5; }
+}

@@ -70,6 +70,27 @@ export function directedPoints({ attempt, isCorrect, points = 0, negativePoints 
   return isCorrect ? Math.round((points * passPercent) / 100) : 0;
 }
 
+/**
+ * How many questions of a DIRECTED round to play so every group gets the same
+ * number of turns: the largest multiple of `groups` that fits. With fewer
+ * questions than groups (or no groups yet) all of them are played.
+ */
+export function playableCount(total, groups) {
+  const n = Math.max(0, int(total, 0));
+  const g = Math.max(0, int(groups, 0));
+  if (!g || n < g) return n;
+  return Math.floor(n / g) * g;
+}
+
+/**
+ * Groups a round may eliminate, given how many are still in. Quiz formats are
+ * often planned for more groups than actually join, so elimination never
+ * leaves fewer than `minLeft` groups playing.
+ */
+export function eliminationAllowance(activeCount, wanted, minLeft = 2) {
+  return Math.max(0, Math.min(int(wanted, 0), int(activeCount, 0) - minLeft));
+}
+
 /** Points available after `revealed` clues (1-based). */
 export function cluePointsFor(question, revealed) {
   const list = Array.isArray(question?.cluePoints) ? question.cluePoints.filter((n) => Number.isFinite(n)) : [];

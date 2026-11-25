@@ -39,6 +39,9 @@ function QuizScreen({ socket, participantData, initialGameState }) {
   const [clueLocked, setClueLocked] = useState(false)
   const [turnResult, setTurnResult] = useState(null)
   const [roundEnd, setRoundEnd] = useState(null)
+  const [markFixed, setMarkFixed] = useState(null) // host corrected this group's mark
+  const currentQIdRef = useRef(null)
+  currentQIdRef.current = currentQuestion?.id || null
   const [eliminated, setEliminated] = useState(participantData?.eliminated ? { round: participantData.eliminatedRound } : null)
   const toastTimer = useRef(null)
 
@@ -145,6 +148,17 @@ function QuizScreen({ socket, participantData, initialGameState }) {
     })
 
     socket.on('round-ended', (data) => setRoundEnd(data))
+    // Host fixed a mark: refresh the round card, and tell this group if it was theirs
+    socket.on('round-summary-updated', (data) => setRoundEnd((prev) => (prev && prev.round === data.round ? { ...prev, ...data } : prev)))
+    socket.on('marks-corrected', (data) => {
+      if (data.participantId !== participantData.id) return
+      if (data.questionId === currentQIdRef.current) {
+        setFeedback((prev) => ({ ...(prev || {}), isCorrect: data.isCorrect, points: data.points }))
+        setAnswerSubmitted(true)
+      }
+      setMarkFixed(data)
+      setTimeout(() => setMarkFixed(null), 5000)
+    })
 
     socket.on('group-eliminated', (data) => {
       if (data.groups?.some((g) => g.id === participantData.id)) setEliminated({ round: data.round })
@@ -255,6 +269,8 @@ function QuizScreen({ socket, participantData, initialGameState }) {
       socket.off('clue-revealed')
       socket.off('clue-reopened')
       socket.off('round-ended')
+      socket.off('round-summary-updated')
+      socket.off('marks-corrected')
       socket.off('group-eliminated')
     }
   }, [socket, participantData])
@@ -350,9 +366,16 @@ function QuizScreen({ socket, participantData, initialGameState }) {
     return <EliminatedView round={eliminated.round} name={participantData?.name} />
   }
 
+  const markFixedToast = markFixed && (
+    <div className={`tm-toast ${markFixed.isCorrect ? 'good' : 'bad'}`} key={`fix-${markFixed.questionId}-${markFixed.points}`}>
+      Host updated your mark: <strong>{markFixed.points > 0 ? '+' : ''}{markFixed.points} pts</strong>
+    </div>
+  )
+
   if (roundEnd) {
     return (
       <div className="quiz-screen fade-in">
+        {markFixedToast}
         <RoundEndCard data={roundEnd} me={participantData.id} />
       </div>
     )
@@ -376,6 +399,7 @@ function QuizScreen({ socket, participantData, initialGameState }) {
   
   return (
     <div className="quiz-screen fade-in">
+      {markFixedToast}
       {/* Header: question/round · timer · score/rank in one compact row */}
       <div className="quiz-header qs-top">
         <div className="qs-col">

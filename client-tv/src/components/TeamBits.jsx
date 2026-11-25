@@ -118,6 +118,13 @@ export function TeamRoundRecap({ data, isHost, onEliminate, onNextRound, elimina
         </div>
       )}
 
+      {data.eliminationSkipped && !elim && (
+        <div className="tm-elim done">
+          <strong>No elimination this round</strong>
+          <span className="ds-dim">Only {data.eliminationSkipped.groupsLeft} groups are left — at least 2 always stay in.</span>
+        </div>
+      )}
+
       {isHost && (
         <button className="ds-btn ds-btn-primary ds-btn-lg tm-next" disabled={pending} onClick={onNextRound}>
           {pending ? 'Confirm elimination first' : `Start round ${data.nextRound} →`}

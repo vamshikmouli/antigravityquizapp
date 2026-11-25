@@ -64,6 +64,10 @@ export const SOCKET_EVENTS = {
   CLUE_REOPENED: 'clue-reopened',         // wrong clue answer: buzzer reopens for the rest
   ELIMINATE_GROUP: 'eliminate-group',     // host confirms elimination
   GROUP_ELIMINATED: 'group-eliminated',
+  GET_MARKS: 'get-marks',                 // host: marks given for a played question
+  CORRECT_MARK: 'correct-mark',           // host fixes one group's mark/points
+  MARKS_CORRECTED: 'marks-corrected',
+  ROUND_SUMMARY_UPDATED: 'round-summary-updated',
 
   // Answers
   SUBMIT_ANSWER: 'submit-answer',

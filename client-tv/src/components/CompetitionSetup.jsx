@@ -157,7 +157,7 @@ export default function CompetitionSetup({ quiz, questions, token, onClose, onSa
                 })}
               </div>
               <div className="ds-alert info" style={{ marginTop: 14 }}>
-                Timing, points and minus points come from each question. Groups join with their group name; directed questions rotate through the groups in join order.
+                Timing, points and minus points come from each question. Groups join with their group name; directed questions rotate through the groups in join order. Turns and eliminations adapt to how many groups actually join: every group gets the same number of directed questions, and at least 2 groups always stay in.
               </div>
             </>
           )}

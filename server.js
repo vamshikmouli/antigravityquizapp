@@ -997,8 +997,12 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
       }
       
       const session = await sessionController.getSessionById(sessionId);
-      const nextIndex = session.currentQuestionIndex;
-      
+      // Group rounds: skip leftover questions so every group gets the same number of turns.
+      const nextIndex = await competition.nextPlayableIndex(sessionId, session.questions, session.currentQuestionIndex);
+      if (nextIndex !== session.currentQuestionIndex) {
+        await sessionController.updateCurrentQuestion(sessionId, nextIndex);
+      }
+
       if (nextIndex >= session.questions.length) {
         // Quiz completed
         await sessionController.updateSessionStatus(sessionId, SESSION_STATUS.COMPLETED);
@@ -1416,6 +1420,7 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
       }
 
       // Notify everyone results are ready (to update TV/Host view)
+      await competition.onShowResults(sessionId); // answer is out: marks can be fixed
       io.to(sessionCode).emit(SOCKET_EVENTS.SHOW_RESULTS, {
         correctAnswer: result.correctAnswer,
         correctCount: 1,
@@ -1479,6 +1484,7 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
       }
 
       // Notify everyone results are ready
+      await competition.onShowResults(sessionId); // answer is out: marks can be fixed
       io.to(sessionCode).emit(SOCKET_EVENTS.SHOW_RESULTS, {
         correctAnswer: result.correctAnswer,
         correctCount: 0,
@@ -1550,6 +1556,7 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
       }
 
       // Notify everyone results for this specific pick
+      await competition.onShowResults(sessionId); // answer is out: marks can be fixed
       io.to(sessionCode).emit(SOCKET_EVENTS.SHOW_RESULTS, {
         correctAnswer: result.correctAnswer,
         correctCount: isCorrect ? 1 : 0,
