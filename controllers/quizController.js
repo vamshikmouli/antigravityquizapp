@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { ownerScope, tenantStamp } from './scope.js';
+import { normalizeRoundSettings } from './competition.js';
 const prisma = new PrismaClient();
 
 /**
@@ -196,3 +197,32 @@ export async function importQuestionsFromQuiz(req, res) {
   }
 }
 
+
+/**
+ * PUT /api/quizzes/:id/competition — competition (team) mode settings.
+ * Body: { mode: 'CLASSIC' | 'TEAMS', roundSettings: [{ round, name, format,
+ *         passOnWrong, passPercent, passTimeLimit, eliminate }] }
+ */
+export async function updateCompetition(req, res) {
+  try {
+    const { id } = req.params;
+    const { mode, roundSettings } = req.body || {};
+    const existing = await prisma.quiz.findFirst({ where: { id, ...ownerScope(req.user) } });
+    if (!existing) return res.status(404).json({ error: 'Quiz not found or unauthorized' });
+    if (mode !== undefined && mode !== 'CLASSIC' && mode !== 'TEAMS') {
+      return res.status(400).json({ error: 'mode must be CLASSIC or TEAMS' });
+    }
+    const updated = await prisma.quiz.update({
+      where: { id },
+      data: {
+        ...(mode !== undefined && { mode }),
+        ...(roundSettings !== undefined && { roundSettings: normalizeRoundSettings(roundSettings) })
+      },
+      select: { id: true, mode: true, roundSettings: true }
+    });
+    res.json(updated);
+  } catch (error) {
+    console.error('Update competition error:', error);
+    res.status(500).json({ error: 'Failed to save competition settings' });
+  }
+}

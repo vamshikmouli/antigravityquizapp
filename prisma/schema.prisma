@@ -31,6 +31,9 @@ model Question {
   imageUrl       String?  // Image for the question
   optionImages   String[] // Images for options (MCQ/Buzzer)
   readingTime    Int      @default(0)  // Seconds to wait before buzzer activates
+  // Clue round: clues revealed one by one; cluePoints[i] = points if answered after clue i+1.
+  clues          String[] @default([])
+  cluePoints     Int[]    @default([])
   musicFile      String?
   category       String?
   createdAt      DateTime @default(now())
@@ -48,6 +51,7 @@ enum QuestionType {
   ORAL_OPEN
   TRUE_FALSE
   SHORT_ANSWER
+  CLUE
 }
 
 model Quiz {
@@ -61,6 +65,12 @@ model Quiz {
   schoolId    String?
   questions   Question[]
   sessions    Session[]
+  // Competition (team) mode: CLASSIC = everyone answers everything (default);
+  // TEAMS = one phone per group, per-round formats, passes and elimination.
+  mode          String   @default("CLASSIC")
+  // [{ round, name, format: DIRECTED|ALL|BUZZER|CLUE, passOnWrong, passPercent,
+  //    passTimeLimit, eliminate }]
+  roundSettings Json?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 }
@@ -163,6 +173,9 @@ model Participant {
   score       Int      @default(0)
   buzzerWins  Int      @default(0)
   joinedAt    DateTime @default(now())
+  // Competition mode: set when the group is knocked out.
+  eliminatedAt    DateTime?
+  eliminatedRound Int?
   
   session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   answers     Answer[]

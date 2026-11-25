@@ -37,7 +37,13 @@ export function formatTimestamp(timestamp) {
  */
 export function calculateRankings(participants) {
   // Sort by score descending, then by buzzer wins, then by join time
+  // Eliminated groups (competition mode) always rank below active ones,
+  // latest knocked out first.
   const sorted = [...participants].sort((a, b) => {
+    const ae = a.eliminatedAt ? 1 : 0;
+    const be = b.eliminatedAt ? 1 : 0;
+    if (ae !== be) return ae - be;
+    if (ae && be && (b.eliminatedRound || 0) !== (a.eliminatedRound || 0)) return (b.eliminatedRound || 0) - (a.eliminatedRound || 0);
     if (b.score !== a.score) return b.score - a.score;
     if (b.buzzerWins !== a.buzzerWins) return b.buzzerWins - a.buzzerWins;
     return new Date(a.joinedAt) - new Date(b.joinedAt);
@@ -45,7 +51,8 @@ export function calculateRankings(participants) {
   
   return sorted.map((participant, index) => ({
     ...participant,
-    rank: index + 1
+    rank: index + 1,
+    eliminated: Boolean(participant.eliminatedAt)
   }));
 }
 
@@ -125,9 +132,13 @@ export function getScoreDistribution(participants) {
 export function isValidQuestion(question) {
   if (!question.text || typeof question.text !== 'string') return false;
   
-  const validTypes = ['MULTIPLE_CHOICE', 'BUZZER', 'ORAL_BUZZER', 'ORAL_OPEN', 'TRUE_FALSE', 'SHORT_ANSWER'];
+  const validTypes = ['MULTIPLE_CHOICE', 'BUZZER', 'ORAL_BUZZER', 'ORAL_OPEN', 'TRUE_FALSE', 'SHORT_ANSWER', 'CLUE'];
   if (!question.type || !validTypes.includes(question.type)) return false;
   
+  if (question.type === 'CLUE') {
+    if (!Array.isArray(question.clues) || question.clues.filter((c) => typeof c === 'string' && c.trim()).length < 1) return false;
+    if (!question.correctAnswer) return false;
+  } else
   // SHORT_ANSWER, ORAL_BUZZER, and ORAL_OPEN don't require options
   if (question.type !== 'SHORT_ANSWER' && question.type !== 'ORAL_BUZZER' && question.type !== 'ORAL_OPEN') {
     if (!Array.isArray(question.options) || question.options.length < 2) return false;

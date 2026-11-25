@@ -26,6 +26,7 @@ import { ownerScope, hostScope, tenantStamp } from './controllers/scope.js';
 import { getBuzzerManager, removeBuzzerManager } from './controllers/buzzerController.js';
 import { rttStats, pushSample, collectionWindowMs, randomArmDelay } from './controllers/fairBuzzer.js';
 import { createBuzzerAudit } from './controllers/buzzerAudit.js';
+import { createCompetition } from './controllers/competitionSocket.js';
 import multer from 'multer';
 import fs from 'fs';
 
@@ -132,6 +133,9 @@ app.use(express.json());
 // Store active sessions and their socket rooms
 const activeSessions = new Map();
 
+// Competition (team) mode: turns, passes, clue rounds, elimination.
+const competition = createCompetition({ io, prisma, getBuzzerManager, startBuzzerRound, activeSessions });
+
 // ============================================================================
 // REST API ROUTES
 // ============================================================================
@@ -157,6 +161,7 @@ app.get('/api/quizzes', authenticateToken, quizController.getAllQuizzes);
 app.get('/api/quizzes/:id', authenticateToken, quizController.getQuiz);
 app.post('/api/quizzes', authenticateToken, quizController.createQuiz);
 app.put('/api/quizzes/:id', authenticateToken, quizController.updateQuiz);
+app.put('/api/quizzes/:id/competition', authenticateToken, quizController.updateCompetition);
 app.delete('/api/quizzes/:id', authenticateToken, quizController.deleteQuiz);
 app.post('/api/quizzes/:id/import-questions', authenticateToken, quizController.importQuestionsFromQuiz);
 
@@ -566,7 +571,7 @@ function studentSocketsIn(sessionCode, sessionId) {
   const ids = io.sockets.adapter.rooms.get(sessionCode) || new Set();
   return [...ids]
     .map((id) => io.sockets.sockets.get(id))
-    .filter((s) => s && s.data.role === 'student' && s.data.participantId && s.data.sessionId === sessionId);
+    .filter((s) => s && s.data.role === 'student' && s.data.participantId && s.data.sessionId === sessionId && !s.data.eliminated);
 }
 
 /** Server-initiated RTT probe: a phone can delay a reply but never speed it up. */
@@ -626,6 +631,8 @@ function openBuzzerRound(sessionId, sessionCode, roundId) {
 }
 
 function startBuzzerAnswerTimer(bm, sessionCode) {
+  // Clue round: the host judges the spoken answer, so no auto-reopen timer.
+  if (competition.isClueInPlay(bm.sessionId)) return;
   bm.setAnswerTimeout(() => {
     // Winner didn't answer in time: reopen the question to everyone.
     bm.deactivate();
@@ -751,6 +758,7 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
           
           socket.data.participantId = participant.id;
           socket.data.participantName = participant.name;
+          socket.data.eliminated = Boolean(participant.eliminatedAt);
           startLatencyProbe(socket);
           
           // Prepare rejoin data if session is active
@@ -790,8 +798,11 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
             participant: {
               id: participant.id,
               name: participant.name,
-              score: participant.score
+              score: participant.score,
+              eliminated: Boolean(participant.eliminatedAt),
+              eliminatedRound: participant.eliminatedRound ?? null
             },
+            mode: await competition.mode(session.id),
             currentGameState
           });
         } catch (error) {
@@ -938,8 +949,11 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
         // Quiz completed
         await sessionController.updateSessionStatus(sessionId, SESSION_STATUS.COMPLETED);
         const analytics = await analyticsController.generateAnalytics(sessionId);
+        const compSummary = await competition.finalSummary(sessionId);
+        if (compSummary) analytics.competition = compSummary;
         io.to(sessionCode).emit(SOCKET_EVENTS.END_QUIZ, { message: 'Quiz completed!' });
         io.to(sessionCode).emit(SOCKET_EVENTS.ANALYTICS_READY, { analytics });
+        competition.forget(sessionId);
         return;
       }
       
@@ -956,7 +970,8 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
            io.to(sessionCode).emit(SOCKET_EVENTS.ROUND_ENDED, {
              round: prevQ.round,
              nextRound: currentQ.round,
-             leaderboard: rankings
+             leaderboard: rankings,
+             ...(await competition.onRoundEnded(sessionId, prevQ.round))
            });
            return;
         }
@@ -982,9 +997,15 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
         timeLimit: question.timeLimit,
         readingTime: question.readingTime || 0,
         round: question.round,
+        category: question.category || null,
         questionNumber: nextIndex + 1,
         totalQuestions: session.questions.length
       };
+
+      // Any previous round's timers die here, so a stale buzzer can never
+      // open on this question.
+      getBuzzerManager(sessionId).deactivate();
+      const comp = await competition.onQuestionStart({ sessionId, sessionCode, question, questionData });
       
       const startTime = Date.now();
       
@@ -1000,12 +1021,9 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
         startTime
       });
       
-      // Any previous round's timers die here, so a stale buzzer can never
-      // open on this question.
-      getBuzzerManager(sessionId).deactivate();
-
-      // Buzzer question: reading time -> get ready (random hold) -> open.
-      if (question.type === QUESTION_TYPES.BUZZER || question.type === QUESTION_TYPES.ORAL_BUZZER) {
+      // Buzzer question (or clue round): reading time -> get ready (random hold) -> open.
+      const isBuzzerType = question.type === QUESTION_TYPES.BUZZER || question.type === QUESTION_TYPES.ORAL_BUZZER;
+      if (comp.buzzer ?? isBuzzerType) {
         startBuzzerRound({
           sessionId,
           sessionCode,
@@ -1038,6 +1056,7 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
       if (currentQIndex < 0) return;
       
       const currentQ = session.questions[currentQIndex].question;
+      await competition.onShowResults(sessionId);
       const participants = await sessionController.getParticipants(sessionId);
       
       let correctCount = 0;
@@ -1070,7 +1089,8 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
         totalAnswers: correctCount + incorrectCount,
         correctPercentage: (correctCount + incorrectCount) > 0 
           ? Math.round((correctCount / (correctCount + incorrectCount)) * 100) 
-          : 0
+          : 0,
+        clues: currentQ.type === QUESTION_TYPES.CLUE ? currentQ.clues : undefined
       });
       
     } catch (error) {
@@ -1094,6 +1114,9 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
       
       // Generate analytics FIRST
       const analytics = await analyticsController.generateAnalytics(sessionId);
+      const compSummary = await competition.finalSummary(sessionId);
+      if (compSummary) analytics.competition = compSummary;
+      competition.forget(sessionId);
       console.log(`[Quiz] Analytics generated for ${sessionCode}`);
       
       // Send end signal to everyone
@@ -1146,6 +1169,10 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
         return;
       }
 
+      if (competition.isBuzzBlockedSync(sessionId, participantId, socket)) {
+        socket.emit(SOCKET_EVENTS.ERROR, { message: socket.data.eliminated ? 'Your group has been eliminated' : 'You are locked out of this question' });
+        return;
+      }
       const bm = getBuzzerManager(sessionId);
       // Older phone bundles send no roundId; accept them only for the current question.
       const roundId = data.roundId || (data.questionId && data.questionId === bm.questionId ? bm.roundId : null);
@@ -1233,6 +1260,9 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
   // ANSWER SUBMISSION
   // ========================================
   
+  // Competition-mode host controls (mark turn, reveal clue, eliminate).
+  competition.register(socket);
+
   socket.on(SOCKET_EVENTS.SUBMIT_ANSWER, async (data) => {
     try {
       const { sessionId, sessionCode, participantId } = socket.data;
@@ -1242,6 +1272,12 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
         socket.emit(SOCKET_EVENTS.ERROR, { message: 'Only students can submit answers' });
         return;
       }
+      if (socket.data.eliminated) {
+        socket.emit(SOCKET_EVENTS.ERROR, { message: 'Your group has been eliminated' });
+        return;
+      }
+      // Competition mode: directed turns are judged here (turn order, passes).
+      if (await competition.onSubmitAnswer(socket, data)) return;
       
       // Submit answer
       const result = await scoringController.submitAnswer(
