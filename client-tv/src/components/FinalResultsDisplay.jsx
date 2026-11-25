@@ -39,6 +39,29 @@ const FinalResultsDisplay = ({ analytics, sessionCode, audioManager, onClose }) 
         {place(winners[2], 'third', '🥉')}
       </section>
 
+      {analytics.competition && (
+        <section className="gm-comp">
+          <div className="gm-comp-col">
+            <h2>Round toppers</h2>
+            {analytics.competition.rounds.map((r) => (
+              <div key={r.round} className="gm-comp-row">
+                <span className="ds-chip accent">R{r.round}</span>
+                <span className="gm-comp-name">{r.name}</span>
+                <strong>{r.toppers.map((id) => detailedResults.find((d) => d.id === id)?.name).filter(Boolean).join(', ') || '—'}</strong>
+              </div>
+            ))}
+          </div>
+          {analytics.competition.eliminated.length > 0 && (
+            <div className="gm-comp-col">
+              <h2>Eliminated</h2>
+              {analytics.competition.eliminated.map((g) => (
+                <div key={g.id} className="gm-comp-row out"><span className="ds-chip bad">R{g.round}</span><span className="gm-comp-name">{g.name}</span></div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
       <section className="gm-scorecard">
         <h2>Scorecard</h2>
         <ResultsTable results={detailedResults} />

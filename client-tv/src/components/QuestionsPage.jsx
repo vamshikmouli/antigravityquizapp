@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import QuestionForm from './QuestionForm';
 import AIGenerateModal from './AIGenerateModal';
+import CompetitionSetup from './CompetitionSetup';
 import { useParams, Link } from 'react-router-dom';
 import { QUESTION_TYPES, typeInfo, LETTERS } from '../lib/questionTypes';
 
@@ -25,6 +26,7 @@ function QuestionsPage() {
   const [loadingQuizzes, setLoadingQuizzes] = useState(false);
   const [showKebabMenu, setShowKebabMenu] = useState(false);
   const [showAIModal, setShowAIModal] = useState(false);
+  const [showSetup, setShowSetup] = useState(false);
   const kebabRef = useRef(null);
 
   const fetchQuizData = async () => {
@@ -175,6 +177,9 @@ function QuestionsPage() {
   }));
   const totalPoints = questions.reduce((s, q) => s + (q.points || 0), 0);
   const openAdd = () => { setEditingQuestion(null); setShowForm(true); };
+  const isTeams = quiz?.mode === 'TEAMS';
+  const roundInfo = (r) => (Array.isArray(quiz?.roundSettings) ? quiz.roundSettings.find((x) => x.round === r) : null);
+  const FORMAT_LABEL = { DIRECTED: 'Directed', ALL: 'Everyone answers', BUZZER: 'Buzzer', CLUE: 'Clue round' };
 
   return (
     <div className="ds-page">
@@ -185,6 +190,7 @@ function QuestionsPage() {
           <h1>{quiz?.title || 'Loading…'}</h1>
         </div>
         <div className="ds-topbar-actions">
+          <button type="button" className={`ds-btn ds-hide-sm ${isTeams ? 'cs-on' : ''}`} onClick={() => setShowSetup(true)} title="Competition setup">🏆 {isTeams ? 'Groups' : 'Competition'}</button>
           <button type="button" className="ds-btn ds-hide-sm" onClick={openAdd}>＋ Add question</button>
           <button type="button" className="ds-btn ds-btn-primary" onClick={() => setShowAIModal(true)}>✨ <span className="ds-hide-sm">Generate with </span>AI</button>
           <div className="ds-menu-wrap" ref={kebabRef}>
@@ -198,6 +204,9 @@ function QuestionsPage() {
                 </button>
                 <button type="button" onClick={() => { setShowAIModal(true); setShowKebabMenu(false); }}>
                   <span>✨</span><div>Generate with AI<small>Plan rounds from a prompt</small></div>
+                </button>
+                <button type="button" onClick={() => { setShowSetup(true); setShowKebabMenu(false); }}>
+                  <span>🏆</span><div>Competition setup<small>Groups, round formats, elimination</small></div>
                 </button>
                 <button type="button" onClick={() => { fetchAvailableQuizzes(); setShowImportModal(true); setShowKebabMenu(false); }}>
                   <span>🔗</span><div>Import from a quiz<small>Copy questions you already have</small></div>
@@ -221,6 +230,7 @@ function QuestionsPage() {
             <span className="ds-chip accent">{questions.length} questions</span>
             <span className="ds-chip">{rounds.length} round{rounds.length === 1 ? '' : 's'}</span>
             <span className="ds-chip good">{totalPoints} points</span>
+            {isTeams && <button type="button" className="ds-chip accent" style={{ border: 'none', cursor: 'pointer' }} onClick={() => setShowSetup(true)}>👥 Group competition</button>}
             {quiz?.description && <span className="ds-muted" style={{ marginLeft: 6 }}>{quiz.description}</span>}
           </div>
           <div className="ds-row" style={{ marginBottom: 22, gap: 12 }}>
@@ -264,8 +274,15 @@ function QuestionsPage() {
       {groups.map((g) => (
         <section key={g.round} style={{ marginBottom: 22 }}>
           <div className="ds-section-title" style={{ marginTop: 6 }}>
-            <h2>Round {g.round}</h2>
+            <h2>Round {g.round}{isTeams && roundInfo(g.round)?.name && roundInfo(g.round).name !== `Round ${g.round}` ? ` · ${roundInfo(g.round).name}` : ''}</h2>
             <span>{g.items.length} question{g.items.length === 1 ? '' : 's'} · {g.items.reduce((s, q) => s + (q.points || 0), 0)} pts</span>
+            {isTeams && roundInfo(g.round) && (
+              <span className="ds-row" style={{ gap: 6 }}>
+                <span className="ds-chip accent">{FORMAT_LABEL[roundInfo(g.round).format] || roundInfo(g.round).format}</span>
+                {roundInfo(g.round).format === 'DIRECTED' && <span className="ds-chip">{roundInfo(g.round).passOnWrong === false ? 'no pass' : `pass ${roundInfo(g.round).passPercent ?? 50}%`}</span>}
+                {roundInfo(g.round).eliminate > 0 && <span className="ds-chip bad">eliminate {roundInfo(g.round).eliminate}</span>}
+              </span>
+            )}
           </div>
           <div style={{ display: 'grid', gap: 10 }}>
             {g.items.map((q, i) => {
@@ -286,7 +303,12 @@ function QuestionsPage() {
                     </div>
                     <h3 className="q-row-text"><span className="ds-muted">{i + 1}.</span> {q.text}</h3>
                     <div className="q-row-opts">
-                      {q.options?.length > 0
+                      {q.type === 'CLUE' && q.clues?.length > 0
+                        ? <>
+                            {q.clues.map((c, ci) => <span key={ci} className="ds-chip"><b style={{ color: 'var(--ds-accent-text)' }}>{ci + 1}</b>&nbsp;{c}{q.cluePoints?.[ci] != null && <span className="ds-muted">&nbsp;· {q.cluePoints[ci]}</span>}</span>)}
+                            <span className="ds-chip good">✓ {q.correctAnswer}</span>
+                          </>
+                        : q.options?.length > 0
                         ? q.options.map((o, oi) => (
                             <span key={oi} className={`ds-opt o${oi % 4} ${o === q.correctAnswer ? 'correct' : ''}`}>
                               <i>{LETTERS[oi]}</i>{o}{o === q.correctAnswer ? ' ✓' : ''}
@@ -351,6 +373,12 @@ function QuestionsPage() {
           quizId={quizId}
           defaultRound={selectedRound === 'All' ? (rounds[rounds.length - 1] || 1) : selectedRound}
         />
+      )}
+
+      {showSetup && quiz && (
+        <CompetitionSetup quiz={quiz} questions={questions} token={token}
+          onClose={() => setShowSetup(false)}
+          onSaved={(d) => setQuiz((prev) => ({ ...prev, mode: d.mode, roundSettings: d.roundSettings }))} />
       )}
 
       {showAIModal && (

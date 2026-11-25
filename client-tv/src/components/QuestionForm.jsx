@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { QUESTION_TYPES, typeInfo, LETTERS } from '../lib/questionTypes';
 
-const TEXT_ANSWER_TYPES = ['SHORT_ANSWER', 'ORAL_BUZZER', 'ORAL_OPEN'];
+const TEXT_ANSWER_TYPES = ['SHORT_ANSWER', 'ORAL_BUZZER', 'ORAL_OPEN', 'CLUE'];
+const DEFAULT_CLUE_POINTS = [30, 20, 10, 5, 5];
 
 function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null, defaultRound = 1 }) {
   const { token } = useAuth();
@@ -18,6 +19,8 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null, 
     imageUrl: editingQuestion?.imageUrl || '',
     optionImages: editingQuestion?.optionImages || (editingQuestion?.options?.length ? editingQuestion.options.map(() => '') : ['', '', '', '']),
     readingTime: editingQuestion?.readingTime || 0,
+    clues: editingQuestion?.clues?.length ? editingQuestion.clues : ['', '', ''],
+    cluePoints: editingQuestion?.cluePoints?.length ? editingQuestion.cluePoints : [30, 20, 10],
     quizId: editingQuestion?.quizId || quizId
   });
   const [uploading, setUploading] = useState({ question: false, options: [] });
@@ -36,6 +39,16 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null, 
           type: value,
           options: ['True', 'False'],
           correctAnswer: 'True' 
+        }));
+      } else if (value === 'CLUE') {
+        setFormData(prev => ({
+          ...prev,
+          type: value,
+          options: [],
+          correctAnswer: '',
+          negativePoints: prev.negativePoints || 5,
+          clues: prev.clues?.length ? prev.clues : ['', '', ''],
+          cluePoints: prev.cluePoints?.length ? prev.cluePoints : [30, 20, 10]
         }));
       } else if (value === 'SHORT_ANSWER' || value === 'ORAL_BUZZER' || value === 'ORAL_OPEN') {
         setFormData(prev => ({ 
@@ -117,6 +130,10 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null, 
       if (formData.options.some(opt => !opt)) return setError('All options must be filled');
     }
     if (formData.type === 'SHORT_ANSWER' && !formData.correctAnswer) return setError('Correct answer is required');
+    if (formData.type === 'CLUE') {
+      if (!formData.clues.some((c) => c.trim())) return setError('Add at least one clue');
+      if (!formData.correctAnswer) return setError('The answer is required');
+    }
 
     setSaving(true);
 
@@ -139,7 +156,13 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null, 
           timeLimit: Math.max(5, Number(formData.timeLimit) || 30),
           readingTime: Math.max(0, Number(formData.readingTime) || 0),
           points: Math.max(0, Number(formData.points) || 0),
-          negativePoints: Math.max(0, Number(formData.negativePoints) || 0)
+          negativePoints: Math.max(0, Number(formData.negativePoints) || 0),
+          ...(formData.type === 'CLUE'
+            ? (() => {
+                const pairs = formData.clues.map((c, i) => [c.trim(), Number(formData.cluePoints[i]) || 0]).filter(([c]) => c);
+                return { clues: pairs.map(([c]) => c), cluePoints: pairs.map(([, p]) => p), points: pairs[0]?.[1] || Number(formData.points) || 0 };
+              })()
+            : { clues: [], cluePoints: [] })
         })
       });
 
@@ -206,7 +229,7 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null, 
           </div>
 
           <div className="qf-section">
-            <div className="ds-label">{hasOptions ? 'Options — tap the circle to mark the correct one' : 'Correct answer'}</div>
+            <div className="ds-label">{hasOptions ? 'Options — tap the circle to mark the correct one' : formData.type === 'CLUE' ? 'Clues' : 'Correct answer'}</div>
 
             {hasOptions && (
               <div className="qf-options">
@@ -250,13 +273,40 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null, 
               </div>
             )}
 
+            {formData.type === 'CLUE' && (
+              <div className="qf-clues">
+                {formData.clues.map((clue, i) => (
+                  <div key={i} className="qf-clue">
+                    <span className="qf-clue-n">{i + 1}</span>
+                    <input className="ds-input" type="text" value={clue} placeholder={`Clue ${i + 1}${i === 0 ? ' (hardest)' : ''}`}
+                      onChange={(e) => setFormData((prev) => { const clues = [...prev.clues]; clues[i] = e.target.value; return { ...prev, clues }; })} />
+                    <label className="qf-clue-pts" title="Points if answered after this clue">
+                      <input className="ds-input" type="number" min="0" value={formData.cluePoints[i] ?? ''}
+                        onChange={(e) => setFormData((prev) => { const cluePoints = [...prev.cluePoints]; cluePoints[i] = e.target.value === '' ? '' : Number(e.target.value); return { ...prev, cluePoints }; })} />
+                      <em>pts</em>
+                    </label>
+                    {formData.clues.length > 1 && (
+                      <button type="button" className="ds-icon-btn danger" aria-label="Remove clue"
+                        onClick={() => setFormData((prev) => ({ ...prev, clues: prev.clues.filter((_, j) => j !== i), cluePoints: prev.cluePoints.filter((_, j) => j !== i) }))}>×</button>
+                    )}
+                  </div>
+                ))}
+                {formData.clues.length < 5 && (
+                  <button type="button" className="ds-btn ds-btn-sm" style={{ justifySelf: 'start' }}
+                    onClick={() => setFormData((prev) => ({ ...prev, clues: [...prev.clues, ''], cluePoints: [...prev.cluePoints, DEFAULT_CLUE_POINTS[prev.clues.length] ?? 5] }))}>＋ Add clue</button>
+                )}
+                <div className="ds-hint">Clues are revealed one by one; groups buzz in. Fewer clues = more points.</div>
+                <div className="ds-label" style={{ marginTop: 10 }}>Answer</div>
+              </div>
+            )}
+
             {TEXT_ANSWER_TYPES.includes(formData.type) && (
               <>
                 <input className="ds-input" type="text" value={formData.correctAnswer}
                   onChange={(e) => handleChange('correctAnswer', e.target.value)}
-                  placeholder={formData.type === 'SHORT_ANSWER' ? 'e.g. Mitochondria (exact match)' : 'Model answer for the host (optional)'} />
+                  placeholder={formData.type === 'SHORT_ANSWER' ? 'e.g. Mitochondria (exact match)' : formData.type === 'CLUE' ? 'e.g. Kuvempu' : 'Model answer for the host (optional)'} />
                 <div className="ds-hint" style={{ marginTop: 6 }}>
-                  {formData.type === 'SHORT_ANSWER' ? 'Students must type this answer.' : 'Shown to the host to judge spoken answers.'}
+                  {formData.type === 'SHORT_ANSWER' ? 'Students must type this answer (spacing and capitals are ignored in group competitions).' : 'Shown to the host to judge spoken answers.'}
                 </div>
               </>
             )}

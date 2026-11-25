@@ -196,3 +196,56 @@
 .bz-compare b { text-align: right; font-variant-numeric: tabular-nums; }
 .bz-result-note { margin: 0; color: var(--ds-dim); font-size: 14px; }
 .bz-result-note.bad { color: var(--ds-bad); font-weight: 700; }
+
+/* ---- competition (team) mode ------------------------------------------ */
+.tm-turn {
+  display: flex; align-items: center; gap: 12px; margin: 12px 0 4px;
+  padding: 12px 14px; border-radius: 18px;
+  background: var(--ds-panel); border: 1px solid var(--ds-border-2);
+  animation: ds-fade-up 0.3s ease-out both;
+}
+.tm-turn > div { display: grid; gap: 2px; }
+.tm-turn strong { font-size: 16px; color: var(--ds-text); }
+.tm-turn span { font-size: 13px; color: var(--ds-dim); }
+.tm-turn-avatar { width: 40px; height: 40px; border-radius: 50%; flex: none; display: grid; place-items: center; font-weight: 900; color: #fff; background: var(--ds-grad); }
+.tm-turn.mine { background: var(--ds-grad); border-color: transparent; box-shadow: 0 14px 36px rgba(168, 85, 247, 0.4); animation: gm-pop-in 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.3) both; }
+.tm-turn.mine strong, .tm-turn.mine span { color: #fff; }
+.tm-turn.mine.pass { background: linear-gradient(135deg, #f59e0b, #ec4899); }
+.tm-turn-icon { width: 40px; height: 40px; border-radius: 12px; flex: none; display: grid; place-items: center; font-size: 22px; background: rgba(255, 255, 255, 0.2); }
+
+.tm-clues { margin: 12px 0 4px; padding: 14px; border-radius: 20px; background: var(--ds-panel); border: 1px solid var(--ds-border-2); display: grid; gap: 8px; }
+.tm-clues-head { display: flex; align-items: center; justify-content: space-between; }
+.tm-worth { padding: 4px 10px; border-radius: 999px; background: var(--ds-good-soft); color: var(--ds-good); font-weight: 800; font-size: 13px; }
+.tm-clue { display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 14px; background: var(--ds-panel-2); color: var(--ds-muted); }
+.tm-clue.open { color: var(--ds-text); background: color-mix(in srgb, var(--ds-accent) 12%, var(--ds-panel-2)); animation: gm-pop-in 0.35s ease-out both; }
+.tm-clue-n { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; font-weight: 900; font-size: 13px; background: var(--ds-grad); color: #fff; }
+.tm-clue:not(.open) .tm-clue-n { background: var(--ds-border-2); }
+.tm-clue-text { font-weight: 650; line-height: 1.35; }
+.tm-clue:not(.open) .tm-clue-text { font-style: italic; }
+.tm-clue-pts { font-size: 12px; font-weight: 800; color: var(--ds-muted); }
+.tm-locked { padding: 10px 12px; border-radius: 12px; background: var(--ds-bad-soft); color: var(--ds-bad); font-weight: 700; font-size: 14px; }
+
+.tm-toast {
+  position: fixed; left: 50%; top: 14px; transform: translateX(-50%); z-index: 1200;
+  padding: 10px 16px; border-radius: 999px; font-size: 14px; color: #fff; white-space: nowrap;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35); animation: ds-fade-up 0.3s ease-out both;
+}
+.tm-toast.good { background: linear-gradient(135deg, #10b981, #059669); }
+.tm-toast.bad { background: linear-gradient(135deg, #fb7185, #e11d48); }
+
+.tm-roundend {
+  margin-top: 24px; padding: 26px 20px; border-radius: 26px; text-align: center; display: grid; gap: 12px; justify-items: center;
+  background: color-mix(in srgb, var(--ds-elev) 85%, transparent); border: 1px solid var(--ds-border-2); box-shadow: var(--ds-shadow);
+  animation: gm-pop-in 0.4s ease-out both;
+}
+.tm-roundend h3 { margin: 0; font-size: 22px; color: var(--ds-text); }
+.tm-roundend-big { font-size: 56px; font-weight: 900; line-height: 1; background: var(--ds-grad); -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; display: grid; }
+.tm-roundend-big small { font-size: 13px; font-weight: 700; color: var(--ds-muted); -webkit-text-fill-color: var(--ds-muted); margin-top: 6px; }
+.tm-roundend-row { display: flex; gap: 8px; }
+.tm-roundend-row span { padding: 6px 12px; border-radius: 999px; background: var(--ds-panel-2); font-size: 14px; color: var(--ds-dim); }
+.tm-roundend-row b { color: var(--ds-text); }
+.tm-topper { padding: 10px 14px; border-radius: 14px; background: rgba(251, 191, 36, 0.14); color: var(--ds-warn); font-size: 14px; }
+.tm-risk { padding: 10px 14px; border-radius: 14px; background: var(--ds-bad-soft); color: var(--ds-bad); font-weight: 700; font-size: 14px; }
+
+.tm-out h1 { font-size: 28px; }
+.tm-out-icon { font-size: 64px; animation: gm-float 2.4s ease-in-out infinite; }

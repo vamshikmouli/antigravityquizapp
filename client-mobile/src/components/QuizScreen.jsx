@@ -10,6 +10,7 @@ function eventTime(e) {
   return typeof ts === 'number' && ts > 0 && ts <= now + 5 && now - ts < 1000 ? ts : now
 }
 import AnswerOptions from './AnswerOptions'
+import { TurnBanner, ClueBoard, TurnToast, RoundEndCard, EliminatedView } from './TeamBits'
 import './QuizScreen.css'
 
 function QuizScreen({ socket, participantData, initialGameState }) {
@@ -31,6 +32,13 @@ function QuizScreen({ socket, participantData, initialGameState }) {
   // Fair buzzer: 'idle' | 'armed' | 'open' | 'pressed' | 'falseStart'
   const [buzzerPhase, setBuzzerPhase] = useState('idle')
   const [buzzResult, setBuzzResult] = useState(null) // fairness + ranking from the server
+  // Competition (team) mode
+  const [turn, setTurn] = useState(initialGameState?.question?.turn || null)
+  const [clueLocked, setClueLocked] = useState(false)
+  const [turnResult, setTurnResult] = useState(null)
+  const [roundEnd, setRoundEnd] = useState(null)
+  const [eliminated, setEliminated] = useState(participantData?.eliminated ? { round: participantData.eliminatedRound } : null)
+  const toastTimer = useRef(null)
 
   const timerRef = useRef(null)
   const roundIdRef = useRef(null)
@@ -84,11 +92,58 @@ function QuizScreen({ socket, participantData, initialGameState }) {
       shownAtRef.current = null
 
       // For non-buzzer questions, enable answering immediately
-      if (!['BUZZER', 'ORAL_BUZZER'].includes(data.question.type)) {
+      if (!['BUZZER', 'ORAL_BUZZER', 'CLUE'].includes(data.question.type)) {
         setCanAnswer(true)
       } else {
         setCanAnswer(false)
       }
+
+      // Competition: directed questions only open for the group whose turn it is.
+      setTurn(data.question.turn || null)
+      setClueLocked(false)
+      setTurnResult(null)
+      setRoundEnd(null)
+      if (data.question.format === 'DIRECTED') {
+        setCanAnswer(data.question.turn?.participantId === participantData.id)
+      }
+    })
+
+    // Directed question passed to the next group (new, shorter timer).
+    socket.on('turn-passed', (data) => {
+      setTurn(data.turn)
+      setCurrentQuestion((q) => (q && q.id === data.questionId ? { ...q, timeLimit: data.timeLimit, readingTime: 0 } : q))
+      setQuestionStartTime(data.startTime)
+      setTimerPhase('QUESTION')
+      setTotalTime(data.timeLimit)
+      setTimeRemaining(data.timeLimit)
+      const mine = data.turn.participantId === participantData.id
+      setCanAnswer(mine)
+      if (mine) { setAnswerSubmitted(false); setFeedback(null) }
+    })
+
+    socket.on('turn-result', (data) => {
+      setTurnResult(data)
+      clearTimeout(toastTimer.current)
+      toastTimer.current = setTimeout(() => setTurnResult(null), 3000)
+    })
+
+    socket.on('clue-revealed', (data) => {
+      setCurrentQuestion((q) => (q && q.id === data.questionId ? { ...q, clues: data.clues, pointsNow: data.pointsNow } : q))
+    })
+
+    // Wrong clue answer: buzzer reopens for everyone not locked out.
+    socket.on('clue-reopened', (data) => {
+      setBuzzerWinner(null)
+      setBuzzResult(null)
+      setBuzzerLocked(false)
+      if (data.lockedOut?.includes(participantData.id)) { setClueLocked(true); setPhase('idle') }
+      else if (buzzerPhaseRef.current !== 'falseStart') setPhase('idle')
+    })
+
+    socket.on('round-ended', (data) => setRoundEnd(data))
+
+    socket.on('group-eliminated', (data) => {
+      if (data.groups?.some((g) => g.id === participantData.id)) setEliminated({ round: data.round })
     })
     
     // Get ready: paint the (grey) buzzer now so opening it later is one cheap frame.
@@ -96,6 +151,9 @@ function QuizScreen({ socket, participantData, initialGameState }) {
       roundIdRef.current = data?.roundId || null
       setIsReading(false)
       setCanAnswer(false)
+      setBuzzerWinner(null)
+      setBuzzResult(null)
+      setBuzzerLocked(false)
       if (buzzerPhaseRef.current !== 'falseStart') setPhase('armed')
     })
 
@@ -180,6 +238,12 @@ function QuizScreen({ socket, participantData, initialGameState }) {
       socket.off('buzzer-timeout')
       socket.off('answer-received')
       socket.off('leaderboard-update')
+      socket.off('turn-passed')
+      socket.off('turn-result')
+      socket.off('clue-revealed')
+      socket.off('clue-reopened')
+      socket.off('round-ended')
+      socket.off('group-eliminated')
     }
   }, [socket, participantData])
   
@@ -270,6 +334,23 @@ function QuizScreen({ socket, participantData, initialGameState }) {
     setAnswerSubmitted(true)
   }
   
+  if (eliminated) {
+    return <EliminatedView round={eliminated.round} name={participantData?.name} />
+  }
+
+  if (roundEnd) {
+    return (
+      <div className="quiz-screen fade-in">
+        <RoundEndCard data={roundEnd} me={participantData.id} />
+      </div>
+    )
+  }
+
+  const isDirected = currentQuestion?.format === 'DIRECTED'
+  const isClue = currentQuestion?.type === 'CLUE'
+  const myTurn = isDirected && turn?.participantId === participantData.id
+  const oralTurn = myTurn && !currentQuestion.options?.length && currentQuestion.type !== 'SHORT_ANSWER'
+
   if (!currentQuestion) {
     return (
       <div className="quiz-screen">
@@ -364,7 +445,11 @@ function QuizScreen({ socket, participantData, initialGameState }) {
       </div>
       
       {/* Buzzer or Answer Options */}
-      {(currentQuestion.type === 'BUZZER' || currentQuestion.type === 'ORAL_BUZZER') && buzzerPhase !== 'idle' && !buzzerWinner ? (
+      {isDirected && <TurnBanner turn={turn} me={participantData.id} oral={oralTurn} />}
+      {isClue && <ClueBoard question={currentQuestion} locked={clueLocked} />}
+      <TurnToast result={turnResult} />
+
+      {(currentQuestion.type === 'BUZZER' || currentQuestion.type === 'ORAL_BUZZER' || (isClue && !clueLocked)) && buzzerPhase !== 'idle' && !buzzerWinner ? (
         <BuzzerButton
           phase={buzzerPhase}
           onPress={handleBuzzerPress}
@@ -388,7 +473,7 @@ function QuizScreen({ socket, participantData, initialGameState }) {
                     {margin != null && <span>ahead by <b>{margin}</b> ms</span>}
                   </div>
                 )}
-                {currentQuestion.type === 'ORAL_BUZZER' ? (
+                {currentQuestion.type === 'ORAL_BUZZER' || isClue ? (
                   <div className="bz-result-say">🎤 <strong>Answer out loud now!</strong><span>The host will mark your answer.</span></div>
                 ) : (
                   <p className="bz-result-next">Pick your answer below 👇</p>
@@ -445,7 +530,7 @@ function QuizScreen({ socket, participantData, initialGameState }) {
       )}
 
       {/* Answer Options (MCQ / TrueFalse / Buzzer) */}
-      {canAnswer && !answerSubmitted && !['SHORT_ANSWER', 'ORAL_BUZZER'].includes(currentQuestion.type) && (
+      {canAnswer && !answerSubmitted && !['SHORT_ANSWER', 'ORAL_BUZZER', 'ORAL_OPEN', 'CLUE'].includes(currentQuestion.type) && (
         <AnswerOptions 
           options={currentQuestion.options}
           optionImages={currentQuestion.optionImages}
@@ -473,7 +558,7 @@ function QuizScreen({ socket, participantData, initialGameState }) {
       )}
       
       {/* Time's Up Overlay */}
-      {timeRemaining === 0 && !answerSubmitted && !feedback && (
+      {timeRemaining === 0 && !answerSubmitted && !feedback && !isClue && (!isDirected || myTurn) && (
         <div className="times-up-overlay fade-in">
           <div className="times-up-content">
             <div className="alarm-icon">⏳</div>

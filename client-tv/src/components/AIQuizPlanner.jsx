@@ -1,6 +1,8 @@
 import { Fragment, useState } from 'react';
 
-import { QUESTION_TYPES, TYPE_INFO } from '../lib/questionTypes';
+import { QUESTION_TYPES as ALL_TYPES, TYPE_INFO } from '../lib/questionTypes';
+// AI writes ordinary question types; clue questions are written by hand.
+const QUESTION_TYPES = ALL_TYPES.filter((t) => t.value !== 'CLUE');
 export { QUESTION_TYPES, TYPE_INFO };
 const DIFFICULTIES = ['easy', 'medium', 'hard'];
 const MAX_TOTAL = 60;

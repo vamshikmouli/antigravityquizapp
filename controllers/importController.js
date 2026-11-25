@@ -40,11 +40,12 @@ export async function importQuestions(filePath, ownerId, quizId, tenant = {}) {
         }
 
         // Validate type
-        const typeRaw = row['Type']?.toString().trim().toUpperCase();
-        const type = typeRaw === 'MCQ' ? QUESTION_TYPES.MULTIPLE_CHOICE : typeRaw;
+        const typeRaw = row['Type']?.toString().trim().toUpperCase().replace(/[\s/-]+/g, '_');
+        const ALIASES = { MCQ: 'MULTIPLE_CHOICE', TF: 'TRUE_FALSE', TRUE_OR_FALSE: 'TRUE_FALSE', ORAL: 'ORAL_OPEN', VISUAL: 'ORAL_OPEN', RAPID_FIRE: 'MULTIPLE_CHOICE' };
+        const type = ALIASES[typeRaw] || typeRaw;
 
         if (!Object.values(QUESTION_TYPES).includes(type)) {
-          throw new Error(`Invalid type: ${type}. Must be MULTIPLE_CHOICE, BUZZER, TRUE_FALSE, or SHORT_ANSWER`);
+          throw new Error(`Invalid type: ${type}. Use MCQ, TRUE_FALSE, SHORT_ANSWER, BUZZER, ORAL_BUZZER, ORAL_OPEN or CLUE`);
         }
 
         // Prepare question data
@@ -60,6 +61,11 @@ export async function importQuestions(filePath, ownerId, quizId, tenant = {}) {
           readingTime: parseInt(row['Reading Time']) || 0,
           round: parseInt(row['Round']) || 1,
           category: row['Category'] ? row['Category'].toString() : 'General',
+          ...(row['Image URL'] ? { imageUrl: row['Image URL'].toString().trim() } : {}),
+          ...(type === 'CLUE' ? {
+            clues: ['Clue 1', 'Clue 2', 'Clue 3', 'Clue 4', 'Clue 5'].map((k) => row[k]?.toString().trim()).filter(Boolean),
+            cluePoints: (row['Clue Points'] ? row['Clue Points'].toString().split('|').map((n) => parseInt(n, 10)).filter(Number.isFinite) : [])
+          } : {}),
           ownerId,
           quizId,
           tenantId: tenant.tenantId ?? null,

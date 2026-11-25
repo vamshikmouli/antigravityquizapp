@@ -20,14 +20,15 @@ function Leaderboard({ leaderboard, buzzerWinner, variant = 'standard' }) {
           top.map((p, index) => {
             const isBuzz = buzzerWinner && p.id === buzzerWinner.participantId
             return (
-              <div key={p.id} className={`gm-row r${p.rank} ${isBuzz ? 'buzz' : ''}`}
+              <div key={p.id} className={`gm-row r${p.rank} ${isBuzz ? 'buzz' : ''} ${p.eliminated ? 'out' : ''}`}
                 style={{ animationDelay: `${index * 40}ms`, '--c': COLORS[index % COLORS.length] }}>
-                <span className="gm-rank">{medal(p.rank) || p.rank}</span>
+                <span className="gm-rank">{p.eliminated ? '–' : (medal(p.rank) || p.rank)}</span>
                 <span className="gm-avatar sm">{p.name.charAt(0).toUpperCase()}</span>
                 <div className="gm-row-main">
                   <div className="gm-row-name">
                     {p.name}
                     {p.buzzerWins > 0 && <span className="gm-buzz-wins" title="Buzzer wins">🔔 {p.buzzerWins}</span>}
+                    {p.eliminated && <span className="gm-out-tag">OUT</span>}
                   </div>
                   <div className="gm-bar"><i style={{ width: `${Math.max(4, ((p.score || 0) / best) * 100)}%` }} /></div>
                 </div>
