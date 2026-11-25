@@ -176,7 +176,8 @@ export function roundSummary(groups, round) {
     eliminated: Boolean(g.eliminatedAt),
     eliminatedRound: g.eliminatedRound ?? null
   }));
-  const active = rows.filter((r) => !r.eliminated || r.eliminatedRound === round);
+  // Groups that played this round: still in, or knocked out in this round or later.
+  const active = rows.filter((r) => !r.eliminated || (r.eliminatedRound ?? Infinity) >= round);
   const best = active.length ? Math.max(...active.map((r) => r.roundPoints)) : 0;
   const toppers = active.filter((r) => r.roundPoints === best && best > 0).map((r) => r.id);
   rows.sort((a, b) => (a.eliminated - b.eliminated) || (b.total - a.total) || (b.roundPoints - a.roundPoints));

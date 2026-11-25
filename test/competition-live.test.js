@@ -239,4 +239,11 @@ test('competition mode: turns, passes, elimination, clue round', async (t) => {
   const elimErr = next(A.socket, 'error');
   A.socket.emit('submit-answer', { questionId: q.question.id, answer: 'x' });
   assert.match((await elimErr).message, /eliminated/);
+
+  // A quiz that has been played can be deleted (its games go with it).
+  const del = await fetch(`${BASE}/api/quizzes/${made.quizId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+  assert.equal(del.status, 200, await del.text());
+  assert.equal(await prisma.quiz.count({ where: { id: made.quizId } }), 0);
+  assert.equal(await prisma.session.count({ where: { id: made.sessionId } }), 0);
+  made.quizId = null; made.sessionId = null;
 });

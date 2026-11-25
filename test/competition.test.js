@@ -88,6 +88,15 @@ test('roundSummary: round points, toppers, eliminated last', () => {
   assert.deepEqual(s.toppers, ['B']);
 });
 
+test('roundSummary: groups eliminated later still count as toppers of earlier rounds', () => {
+  const groups = [
+    G('A', 60, { answers: [{ points: 15, question: { round: 1 } }] }),
+    G('B', 15, { answers: [{ points: 15, question: { round: 1 } }], eliminatedAt: new Date(), eliminatedRound: 2 }),
+    G('C', 9, { answers: [{ points: 9, question: { round: 1 } }], eliminatedAt: new Date(), eliminatedRound: 0 })
+  ];
+  assert.deepEqual(roundSummary(groups, 1).toppers.sort(), ['A', 'B']);
+});
+
 test('eliminationCandidates: lowest total, ties left to the host', () => {
   assert.deepEqual(eliminationCandidates([G('A', 30), G('B', 10), G('C', 20)]).candidates, ['B']);
   const tie = eliminationCandidates([G('A', 30), G('B', 10), G('C', 10)]);
