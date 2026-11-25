@@ -18,28 +18,37 @@ const SERIOUS_FLAGS = new Set(['CLAMPED', 'BOT_PATTERN'])
 
 /** Host panel: who pressed, their judged times, flags, and re-award buttons. */
 function BuzzReview({ result, winnerId, canOverride, onAward }) {
-  const [open, setOpen] = useState(false)
   const winnerFlags = result.ranking.find(r => r.participantId === winnerId)?.flags || []
   const suspicious = winnerFlags.some(f => SERIOUS_FLAGS.has(f))
+  const [open, setOpen] = useState(suspicious)
+  const slowest = Math.max(1, ...result.ranking.map(r => r.reactionMs || 0))
   return (
-    <div className={`buzz-review ${suspicious ? 'suspicious' : ''}`}>
-      <button className="buzz-review-toggle" onClick={() => setOpen(o => !o)}>
-        {suspicious ? '⚠️ Check this buzz' : '⏱ Buzz details'}
-        {result.falseStarts > 0 && ` · ${result.falseStarts} false start${result.falseStarts > 1 ? 's' : ''}`}
-        {open ? ' ▲' : ' ▼'}
+    <div className={`buzz-review ${suspicious ? 'suspicious' : ''} ${open ? 'open' : ''}`}>
+      <button className="buzz-review-toggle" onClick={() => setOpen(o => !o)} aria-expanded={open}>
+        <span className="buzz-review-icon">{suspicious ? '⚠️' : '⏱'}</span>
+        <span className="buzz-review-title">{suspicious ? 'Check this buzz' : 'Buzz details'}</span>
+        <span className="buzz-review-meta">
+          {result.ranking.length} buzz{result.ranking.length === 1 ? '' : 'es'}
+          {result.falseStarts > 0 && ` · ${result.falseStarts} false start${result.falseStarts > 1 ? 's' : ''}`}
+        </span>
+        <span className="buzz-review-caret">{open ? '▴' : '▾'}</span>
       </button>
       {open && (
         <ol className="buzz-review-list">
-          {result.ranking.map((r) => (
+          {result.ranking.map((r, i) => (
             <li key={r.participantId} className={r.participantId === winnerId ? 'is-winner' : ''}>
+              <span className="buzz-pos">{r.participantId === winnerId ? '🏆' : i + 1}</span>
               <span className="buzz-name">{r.participantName}</span>
+              <span className="buzz-bar"><i style={{ width: `${Math.max(6, ((r.reactionMs || 0) / slowest) * 100)}%` }} /></span>
               <span className="buzz-ms">{r.reactionMs} ms</span>
-              {r.flags?.filter(f => FLAG_INFO[f]).map(f => (
-                <span key={f} className={`buzz-flag ${SERIOUS_FLAGS.has(f) ? 'serious' : ''}`} title={FLAG_INFO[f]}>{f.replaceAll('_', ' ')}</span>
-              ))}
-              {canOverride && r.participantId !== winnerId && (
-                <button className="buzz-award" onClick={() => onAward(r.participantId)}>Award</button>
-              )}
+              <span className="buzz-flags">
+                {r.flags?.filter(f => FLAG_INFO[f]).map(f => (
+                  <span key={f} className={`buzz-flag ${SERIOUS_FLAGS.has(f) ? 'serious' : ''}`} title={FLAG_INFO[f]}>{f.replaceAll('_', ' ').toLowerCase()}</span>
+                ))}
+              </span>
+              {canOverride && r.participantId !== winnerId
+                ? <button className="buzz-award" onClick={() => onAward(r.participantId)}>Award</button>
+                : <span className="buzz-award-spacer" />}
             </li>
           ))}
         </ol>
@@ -408,15 +417,17 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
               
               {/* Buzzer Winner Display - Compact One Line */}
               {buzzerWinner && (
-                <div className="buzzer-winner-compact slide-in-left">
-                  <span className="winner-label-compact">🏆 First to Buzz! </span>
-                  <span className="winner-name-compact">{buzzerWinner.participantName}</span>
+                <div className="buzz-winner-card" key={buzzerWinner.participantId}>
+                  <span className="buzz-winner-avatar">{buzzerWinner.participantName?.charAt(0).toUpperCase()}<i>🔔</i></span>
+                  <div className="buzz-winner-text">
+                    <small>{buzzResult?.fairness?.overridden ? 'Awarded by host' : 'First to buzz'}</small>
+                    <strong>{buzzerWinner.participantName}</strong>
+                  </div>
                   {buzzResult?.fairness?.reactionMs != null && (
-                    <span className="winner-margin-compact">
-                      {buzzResult.fairness.reactionMs} ms
-                      {buzzResult.fairness.marginMs != null && ` · by ${buzzResult.fairness.marginMs} ms`}
-                      {buzzResult.fairness.overridden && ' · awarded by host'}
-                    </span>
+                    <div className="buzz-winner-stats">
+                      <span><b>{buzzResult.fairness.reactionMs}</b> ms</span>
+                      {buzzResult.fairness.marginMs != null && <span>ahead by <b>{buzzResult.fairness.marginMs}</b> ms</span>}
+                    </div>
                   )}
                 </div>
               )}
@@ -534,19 +545,21 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
           )}
           
           {/* Host Controls */}
+          {userRole === 'host' && buzzerWinner && buzzResult?.ranking?.length > 0 && (
+            <BuzzReview
+              key={currentQuestion.id}
+              result={buzzResult}
+              winnerId={buzzerWinner.participantId}
+              canOverride={!showResults}
+              onAward={(participantId) => socket.emit('buzzer-override', {
+                questionId: currentQuestion.id,
+                participantId
+              })}
+            />
+          )}
+
           {userRole === 'host' && (
             <div className="host-controls">
-              {buzzerWinner && buzzResult?.ranking?.length > 0 && (
-                <BuzzReview
-                  result={buzzResult}
-                  winnerId={buzzerWinner.participantId}
-                  canOverride={!showResults}
-                  onAward={(participantId) => socket.emit('buzzer-override', {
-                    questionId: currentQuestion.id,
-                    participantId
-                  })}
-                />
-              )}
               {currentQuestion.type === 'ORAL_BUZZER' && buzzerWinner && !showResults && (
                 <div className="oral-marking-controls">
                   <button

@@ -12,10 +12,10 @@ import './BuzzerButton.css'
  *        'pressed' (sent, waiting for the verdict) | 'falseStart' (locked out)
  */
 const COPY = {
-  armed: { text: 'GET READY', icon: '⏳', hint: 'Wait for red — tapping early locks you out!' },
-  open: { text: 'BUZZ IN!', icon: '🔴', hint: 'Tap to buzz in!' },
-  pressed: { text: 'BUZZED!', icon: '✅', hint: 'Checking who was first…' },
-  falseStart: { text: 'FALSE START', icon: '🚫', hint: 'You tapped too early — locked out for this question.' }
+  armed: { text: 'GET READY', icon: '✋', chip: 'Get ready', hint: 'Wait for red — tapping early locks you out!' },
+  open: { text: 'BUZZ!', icon: '🔔', chip: 'Buzz now!', hint: 'Tap as fast as you can' },
+  pressed: { text: 'BUZZED', icon: '✓', chip: 'Sent', hint: 'Checking who was first…' },
+  falseStart: { text: 'TOO EARLY', icon: '🚫', chip: 'False start', hint: 'You tapped before red — locked out for this question.' }
 }
 
 function BuzzerButton({ phase = 'armed', onPress, timeRemaining }) {
@@ -30,7 +30,10 @@ function BuzzerButton({ phase = 'armed', onPress, timeRemaining }) {
   }
 
   return (
-    <div className="buzzer-container">
+    <div className={`buzzer-container bz-${phase}`}>
+      <span className="bz-chip">{copy.chip}</span>
+      <div className="bz-stage">
+      {phase === 'open' && <><span className="bz-wave" /><span className="bz-wave w2" /></>}
       <button
         className={`buzzer-button phase-${phase} ${phase === 'open' ? 'active' : 'inactive'}`}
         onPointerDown={handlePointerDown}
@@ -46,6 +49,7 @@ function BuzzerButton({ phase = 'armed', onPress, timeRemaining }) {
           <span className="buzzer-icon">{copy.icon}</span>
         </div>
       </button>
+      </div>
       <p className="buzzer-hint">{copy.hint}</p>
     </div>
   )

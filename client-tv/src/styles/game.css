@@ -296,3 +296,62 @@ body[data-theme='light'] .gm-avatar, body[data-theme='light'] .gm-podium-avatar 
 /* lobby: keep the action bar clear of the music pill (bottom-left) */
 .gm-lobby-bar { left: auto; right: 24px; transform: none; width: auto; min-width: min(560px, calc(100vw - 340px)); }
 @media (max-width: 900px) { .gm-lobby-bar { left: 50%; right: auto; transform: translateX(-50%); min-width: 0; width: calc(100vw - 24px); } }
+
+/* ---- fair buzzer (TV) -------------------------------------------------- */
+.question-display-tv .buzz-winner-card {
+  display: flex; align-items: center; gap: 0.9em;
+  padding: 0.6em 1.2em 0.6em 0.6em; border-radius: 999px;
+  background: var(--ds-grad); color: #fff;
+  box-shadow: 0 14px 40px rgba(168, 85, 247, 0.45), 0 0 0 6px var(--ds-accent-soft);
+  animation: gm-pop-in 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.4) both;
+}
+.buzz-winner-avatar {
+  position: relative; width: 2.6em; height: 2.6em; border-radius: 50%; flex: none;
+  display: grid; place-items: center; font-weight: 900; font-size: 1.15em;
+  background: rgba(255, 255, 255, 0.95); color: #7c3aed;
+}
+.buzz-winner-avatar i { position: absolute; right: -0.35em; bottom: -0.25em; font-style: normal; font-size: 0.8em; animation: gm-ring 0.9s ease-in-out 2; }
+@keyframes gm-ring { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-20deg); } 75% { transform: rotate(20deg); } }
+.buzz-winner-text { display: grid; line-height: 1.15; }
+.buzz-winner-text small { font-size: 0.7em; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.85; }
+.buzz-winner-text strong { font-size: 1.45em; font-weight: 900; }
+.buzz-winner-stats { display: flex; gap: 0.4em; margin-left: 0.4em; }
+.buzz-winner-stats span { padding: 0.25em 0.75em; border-radius: 999px; background: rgba(255, 255, 255, 0.18); font-size: 0.85em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.buzz-winner-stats b { font-weight: 900; }
+
+.question-display-tv .buzz-review {
+  width: min(760px, 100%); margin: 0.2em auto 0; border-radius: 1.1em; overflow: hidden;
+  background: color-mix(in srgb, var(--ds-elev) 85%, transparent); border: 1px solid var(--ds-border-2);
+  backdrop-filter: blur(14px); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3);
+}
+.question-display-tv .buzz-review.suspicious { border-color: var(--ds-warn); box-shadow: 0 0 0 4px var(--ds-warn-soft), 0 16px 40px rgba(0, 0, 0, 0.3); }
+.buzz-review-toggle {
+  display: flex; align-items: center; gap: 0.6em; width: 100%;
+  padding: 0.7em 1em; border: none; background: none; color: var(--ds-text); font: inherit; cursor: pointer; text-align: left;
+}
+.buzz-review-toggle:hover { background: var(--ds-panel); }
+.buzz-review-title { font-weight: 800; }
+.buzz-review.suspicious .buzz-review-title { color: var(--ds-warn); }
+.buzz-review-meta { color: var(--ds-muted); font-size: 0.85em; }
+.buzz-review-caret { margin-left: auto; color: var(--ds-muted); }
+.buzz-review-list { list-style: none; margin: 0; padding: 0.2em 0.6em 0.7em; display: grid; gap: 0.35em; border-top: 1px solid var(--ds-border); }
+.buzz-review-list li {
+  display: grid; grid-template-columns: 1.8em minmax(5em, 0.9fr) minmax(4em, 1.1fr) 4.6em auto 4.6em; gap: 0.6em; align-items: center;
+  padding: 0.45em 0.6em; border-radius: 0.8em; background: var(--ds-panel);
+}
+.buzz-review-list li.is-winner { background: var(--ds-accent-soft); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ds-accent) 50%, transparent); }
+.buzz-pos { text-align: center; font-weight: 800; color: var(--ds-muted); }
+.buzz-name { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.buzz-review-list li.is-winner .buzz-name { font-weight: 900; }
+.buzz-bar { height: 6px; border-radius: 6px; background: var(--ds-panel-2); overflow: hidden; }
+.buzz-bar i { display: block; height: 100%; border-radius: 6px; background: var(--ds-grad); }
+.buzz-ms { font-weight: 800; font-variant-numeric: tabular-nums; text-align: right; }
+.buzz-flags { display: flex; gap: 0.3em; flex-wrap: wrap; min-width: 0; }
+.buzz-flag { font-size: 0.72em; font-weight: 700; padding: 0.2em 0.6em; border-radius: 999px; background: var(--ds-panel-2); color: var(--ds-dim); cursor: help; white-space: nowrap; }
+.buzz-flag.serious { background: var(--ds-warn-soft); color: var(--ds-warn); }
+.buzz-award {
+  justify-self: end; padding: 0.35em 0.9em; border-radius: 999px; cursor: pointer;
+  font: inherit; font-size: 0.82em; font-weight: 750;
+  border: 1px solid var(--ds-border-2); background: var(--ds-panel-2); color: var(--ds-text); transition: 0.15s;
+}
+.buzz-award:hover { background: var(--ds-grad); color: #fff; border-color: transparent; }

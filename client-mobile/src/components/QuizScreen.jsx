@@ -372,44 +372,43 @@ function QuizScreen({ socket, participantData, initialGameState }) {
         />
       ) : buzzerWinner ? (
         <div className="buzzer-winner-display">
-          <div className={`winner-message ${buzzerWinner.participantId === participantData.id ? 'you-won' : ''}`}>
-            {buzzerWinner.participantId === participantData.id ? (
-              <>
-                <div className="trophy">🏆</div>
+          {(() => {
+            const won = buzzerWinner.participantId === participantData.id
+            const theirs = buzzResult?.fairness?.reactionMs
+            const margin = buzzResult?.fairness?.marginMs
+            const mine = buzzResult?.ranking?.find(r => r.participantId === participantData.id)
+            const slowest = Math.max(1, theirs || 0, mine?.reactionMs || 0)
+            return won ? (
+              <div className="bz-result won">
+                <div className="bz-result-icon">🏆</div>
                 <h3>You buzzed first!</h3>
-                {buzzResult?.fairness?.reactionMs != null && (
-                  <p className="buzz-times">
-                    Reaction {buzzResult.fairness.reactionMs} ms
-                    {buzzResult.fairness.marginMs != null && ` · ahead by ${buzzResult.fairness.marginMs} ms`}
-                  </p>
+                {theirs != null && (
+                  <div className="bz-result-chips">
+                    <span><b>{theirs}</b> ms reaction</span>
+                    {margin != null && <span>ahead by <b>{margin}</b> ms</span>}
+                  </div>
                 )}
                 {currentQuestion.type === 'ORAL_BUZZER' ? (
-                  <div className="oral-instruction">
-                    <div className="mic-icon">🎤</div>
-                    <p className="highlight-text">ANSWER ORALLY NOW!</p>
-                    <p>The host will mark your answer.</p>
-                  </div>
+                  <div className="bz-result-say">🎤 <strong>Answer out loud now!</strong><span>The host will mark your answer.</span></div>
                 ) : (
-                  <p>Select your answer below</p>
+                  <p className="bz-result-next">Pick your answer below 👇</p>
                 )}
-              </>
+              </div>
             ) : (
-              <>
-                <div className="lock-icon">🔒</div>
+              <div className="bz-result">
+                <div className="bz-result-avatar">{buzzerWinner.participantName?.charAt(0).toUpperCase()}</div>
                 <h3>{buzzerWinner.participantName} buzzed first</h3>
-                {(() => {
-                  const mine = buzzResult?.ranking?.find(r => r.participantId === participantData.id)
-                  const theirs = buzzResult?.fairness?.reactionMs
-                  if (mine && theirs != null) {
-                    return <p className="buzz-times">Their reaction: {theirs} ms · yours: {mine.reactionMs} ms</p>
-                  }
-                  if (buzzerPhase === 'falseStart') return <p className="buzz-times">You were locked out (false start).</p>
-                  return null
-                })()}
-                <p>Waiting for their answer...</p>
-              </>
-            )}
-          </div>
+                {mine && theirs != null && (
+                  <div className="bz-compare">
+                    <div><span>{buzzerWinner.participantName}</span><i style={{ width: `${Math.max(8, (theirs / slowest) * 100)}%` }} /><b>{theirs} ms</b></div>
+                    <div className="me"><span>You</span><i style={{ width: `${Math.max(8, (mine.reactionMs / slowest) * 100)}%` }} /><b>{mine.reactionMs} ms</b></div>
+                  </div>
+                )}
+                {!mine && buzzerPhase === 'falseStart' && <p className="bz-result-note bad">You were locked out (false start).</p>}
+                <p className="bz-result-note">Waiting for their answer…</p>
+              </div>
+            )
+          })()}
         </div>
       ) : currentQuestion.type === 'ORAL_OPEN' ? (
         <div className="oral-instruction">
