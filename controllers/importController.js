@@ -88,8 +88,15 @@ export async function importQuestions(filePath, ownerId, quizId, tenant = {}) {
     let createdCount = 0;
     if (questions.length > 0) {
       try {
+        // Quizzes play in createdAt order and createMany would stamp every row
+        // the same time: keep spreadsheet order, grouped by round.
+        const base = Date.now();
+        const ordered = questions
+          .map((q, i) => ({ q, i }))
+          .sort((a, b) => (a.q.round - b.q.round) || (a.i - b.i))
+          .map(({ q }, i) => ({ ...q, createdAt: new Date(base + i) }));
         const result = await prisma.question.createMany({
-          data: questions
+          data: ordered
         });
         createdCount = result.count;
         console.log(`[Import] Successfully created ${createdCount} questions`);

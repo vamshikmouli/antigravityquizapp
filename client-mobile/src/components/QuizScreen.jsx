@@ -549,7 +549,7 @@ function QuizScreen({ socket, participantData, initialGameState }) {
           <p className="points-change">
             {feedback.points > 0 ? '+' : ''}{feedback.points} pts
           </p>
-          {!feedback.isCorrect && (
+          {!feedback.isCorrect && feedback.correctAnswer && (
             <p className="correct-answer">
               Correct answer: {feedback.correctAnswer}
             </p>
@@ -558,7 +558,9 @@ function QuizScreen({ socket, participantData, initialGameState }) {
       )}
       
       {/* Time's Up Overlay */}
-      {timeRemaining === 0 && !answerSubmitted && !feedback && !isClue && (!isDirected || myTurn) && (
+      {timeRemaining === 0 && !answerSubmitted && !feedback && !isClue && (!isDirected || myTurn) &&
+        (!['BUZZER', 'ORAL_BUZZER'].includes(currentQuestion.type) || buzzerWinner?.participantId === participantData.id) &&
+        currentQuestion.type !== 'ORAL_BUZZER' && (
         <div className="times-up-overlay fade-in">
           <div className="times-up-content">
             <div className="alarm-icon">⏳</div>

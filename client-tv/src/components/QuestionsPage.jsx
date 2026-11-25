@@ -214,6 +214,9 @@ function QuestionsPage() {
                 <button type="button" disabled={importing} onClick={() => { fileInputRef.current?.click(); setShowKebabMenu(false); }}>
                   <span>📁</span><div>{importing ? 'Importing…' : 'Bulk import'}<small>Excel or CSV file</small></div>
                 </button>
+                <a href="/templates/group_competition_template.xlsx" download onClick={() => setShowKebabMenu(false)}>
+                  <span>🏆</span><div>Group quiz template<small>5 rounds: general, visual, rapid fire, buzzer, clue</small></div>
+                </a>
                 <a href="/templates/sample_questions.xlsx" download onClick={() => setShowKebabMenu(false)}>
                   <span>📥</span><div>Download template<small>Sample spreadsheet</small></div>
                 </a>

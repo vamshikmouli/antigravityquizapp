@@ -103,7 +103,11 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
   const [searchTerm, setSearchTerm] = useState('');
 
   // Floating Timer State
-  const [timerPos, setTimerPos] = useState({ x: 1000, y: 100 });
+  // Default: bottom-right of the main area, clear of the question text and host controls.
+  const [timerPos, setTimerPos] = useState(() => ({
+    x: Math.max(20, (typeof window !== 'undefined' ? window.innerWidth : 1600) - Math.max(240, Math.min(360, window.innerWidth * 0.19)) - 170),
+    y: Math.max(100, (typeof window !== 'undefined' ? window.innerHeight : 900) - 170)
+  }));
   const [timerScale, setTimerScale] = useState(1);
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);

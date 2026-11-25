@@ -249,3 +249,9 @@
 
 .tm-out h1 { font-size: 28px; }
 .tm-out-icon { font-size: 64px; animation: gm-float 2.4s ease-in-out infinite; }
+
+/* full width even when the question is short (the app container centres its child) */
+.quiz-screen, .ph-page { width: 100%; box-sizing: border-box; }
+/* #root is a flex column and .container has auto side margins, which makes it
+   shrink to its content; force full width. */
+.container { width: 100%; box-sizing: border-box; }

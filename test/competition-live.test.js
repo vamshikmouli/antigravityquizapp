@@ -64,7 +64,8 @@ before(async () => {
         roundSettings: [
           { round: 1, name: 'General', format: 'DIRECTED', passOnWrong: true, passPercent: 50 },
           { round: 2, name: 'Rapid fire', format: 'DIRECTED', passOnWrong: false, eliminate: 1 },
-          { round: 3, name: 'Clue', format: 'CLUE' }
+          { round: 3, name: 'Buzzer', format: 'BUZZER' },
+          { round: 4, name: 'Clue', format: 'CLUE' }
         ]
       }
     });
@@ -75,7 +76,8 @@ before(async () => {
       q(0, { text: 'R1 Q1', type: 'MULTIPLE_CHOICE', options: ['a', 'b', 'c', 'd'], correctAnswer: 'b', points: 10, negativePoints: 0, round: 1 }),
       q(1, { text: 'R1 Q2 ಕನ್ನಡ', type: 'SHORT_ANSWER', options: [], correctAnswer: 'ಕುವೆಂಪು', points: 10, negativePoints: 0, round: 1 }),
       q(2, { text: 'R2 rapid', type: 'MULTIPLE_CHOICE', options: ['Yes', 'No'], correctAnswer: 'Yes', points: 10, negativePoints: 5, timeLimit: 15, round: 2 }),
-      q(3, { text: 'R3 clue', type: 'CLUE', options: [], clues: ['clue one', 'clue two', 'clue three'], cluePoints: [30, 20, 10], correctAnswer: 'Answer', points: 30, negativePoints: 5, round: 3 })
+      q(3, { text: 'R3 buzzer', type: 'ORAL_BUZZER', options: [], correctAnswer: 'Mars', points: 20, negativePoints: 5, round: 3 }),
+      q(4, { text: 'R4 clue', type: 'CLUE', options: [], clues: ['clue one', 'clue two', 'clue three'], cluePoints: [30, 20, 10], correctAnswer: 'Answer', points: 30, negativePoints: 5, round: 4 })
     ];
     const qs = [];
     for (const r of rows) qs.push(await prisma.question.create({ data: r }));
@@ -116,6 +118,7 @@ test('competition mode: turns, passes, elimination, clue round', async (t) => {
   assert.equal(A.mode, 'TEAMS');
 
   // ---- R1 Q1: directed to Alpha; Alpha wrong -> pass to Bravo -> Bravo right (50%).
+  let winner;
   let qs = next(host, 'question-started');
   host.emit('next-question');
   let q = await qs;
@@ -176,7 +179,26 @@ test('competition mode: turns, passes, elimination, clue round', async (t) => {
   const lb = await prisma.participant.findUnique({ where: { id: A.id } });
   assert.equal(lb.eliminatedRound, 2);
 
-  // ---- R3 clue round: Bravo buzzes wrong (-5, locked out), reveal clue 2, Charlie right (+20).
+  // ---- R3 buzzer round: Charlie buzzes, host marks correct (+20); eliminated Alpha can't buzz.
+  qs = next(host, 'question-started');
+  host.emit('next-question', { force: true });
+  q = await qs;
+  assert.equal(q.question.format, 'BUZZER');
+  const bOpen = await next(C.socket, 'buzzer-activated', 8000);
+  const aBlocked = next(A.socket, 'error');
+  A.socket.emit('buzzer-press', { questionId: q.question.id, roundId: bOpen.roundId, reactionMs: 150 });
+  assert.match((await aBlocked).message, /eliminated/);
+  winner = next(host, 'buzzer-winner');
+  C.socket.emit('buzzer-press', { questionId: q.question.id, roundId: bOpen.roundId, reactionMs: 250 });
+  assert.equal((await winner).winner.participantId, C.id);
+  results = next(host, 'show-results');
+  host.emit('mark-buzzer-correct', { questionId: q.question.id, participantId: C.id });
+  assert.deepEqual((await results).correctNames, ['Charlie']);
+
+  // ---- R4 clue round: Bravo buzzes wrong (-5, locked out), reveal clue 2, Charlie right (+20).
+  const ended3 = next(host, 'round-ended');
+  host.emit('next-question');
+  await ended3;
   qs = next(host, 'question-started');
   host.emit('next-question', { force: true });
   q = await qs;
@@ -185,7 +207,7 @@ test('competition mode: turns, passes, elimination, clue round', async (t) => {
   assert.equal(q.question.pointsNow, 30);
 
   const opened = await next(B.socket, 'buzzer-activated', 6000);
-  let winner = next(host, 'buzzer-winner');
+  winner = next(host, 'buzzer-winner');
   B.socket.emit('buzzer-press', { questionId: q.question.id, roundId: opened.roundId, reactionMs: 250 });
   assert.equal((await winner).winner.participantId, B.id);
 
@@ -211,7 +233,7 @@ test('competition mode: turns, passes, elimination, clue round', async (t) => {
 
   const groups = await prisma.participant.findMany({ where: { sessionId: made.sessionId } });
   const score = Object.fromEntries(groups.map((g) => [g.name, g.score]));
-  assert.deepEqual(score, { Alpha: -5, Bravo: 10, Charlie: 20 });
+  assert.deepEqual(score, { Alpha: -5, Bravo: 10, Charlie: 40 });
 
   // Eliminated group cannot answer.
   const elimErr = next(A.socket, 'error');
