@@ -585,3 +585,11 @@ body:has(.question-display-tv .global-music-controls.inline) .global-music-contr
   .question-display-tv .tv-grid { grid-template-columns: minmax(0, 1fr) clamp(190px, 24vw, 260px); gap: 0.8em; }
   .global-music-controls.inline .music-inline-label { display: none; }
 }
+/* option text sizes to its own card, so words shrink to fit instead of
+   breaking mid-word in narrow windows (container query units) */
+.question-display-tv .answer-card-tv { container-type: inline-size; }
+.question-display-tv .option-text-tv { font-size: max(15px, min(clamp(20px, 1.9vw, 44px), 8.5cqi)); overflow-wrap: break-word; word-break: normal; hyphens: manual; }
+.question-display-tv .option-label-tv { font-size: max(15px, min(clamp(18px, 1.5vw, 34px), 7cqi)); }
+/* the clock freezes and fades once the answer is shown */
+.tv-timer.stopped { opacity: 0.55; }
+.tv-timer.stopped .tv-timer-bar { stroke: var(--ds-muted); }

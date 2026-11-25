@@ -18,20 +18,26 @@ const FLAG_INFO = {
 }
 const SERIOUS_FLAGS = new Set(['CLAMPED', 'BOT_PATTERN'])
 
+// "Clue" and "Clue round" say the same thing: show the format tag only when it adds something.
+const sameTag = (a, b) => {
+  const x = String(a || '').trim().toLowerCase(), y = String(b || '').trim().toLowerCase()
+  return Boolean(x && y && (x.includes(y) || y.includes(x)))
+}
+
 /** Countdown ring for the header: drains clockwise, turns red for the last 5 seconds. */
-function TimerRing({ remaining, total, phase }) {
+function TimerRing({ remaining, total, phase, stopped = false }) {
   const r = 44, c = 2 * Math.PI * r
   const frac = total > 0 ? Math.max(0, Math.min(1, remaining / total)) : 0
-  const low = phase !== 'READING' && remaining <= 5
+  const low = !stopped && phase !== 'READING' && remaining <= 5
   return (
-    <div className={`tv-timer ${phase.toLowerCase()} ${low ? 'low' : ''}`} role="timer" aria-label={`${remaining} seconds left`}>
+    <div className={`tv-timer ${phase.toLowerCase()} ${low ? 'low' : ''} ${stopped ? 'stopped' : ''}`} role="timer" aria-label={stopped ? 'Time stopped' : `${remaining} seconds left`}>
       <svg viewBox="0 0 100 100" aria-hidden="true">
         <circle cx="50" cy="50" r={r} className="tv-timer-track" />
         <circle cx="50" cy="50" r={r} className="tv-timer-bar" strokeDasharray={c} strokeDashoffset={c * (1 - frac)} />
       </svg>
       <div className="tv-timer-text">
         <b>{remaining}</b>
-        <small>{phase === 'READING' ? 'Read' : phase === 'BUZZER' ? 'Buzz' : 'Sec'}</small>
+        <small>{stopped ? 'Done' : phase === 'READING' ? 'Read' : phase === 'BUZZER' ? 'Buzz' : 'Sec'}</small>
       </div>
     </div>
   )
@@ -275,9 +281,9 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
     }
   }, [socket])
   
-  // Timer countdown
+  // Timer countdown (stops once the answer is shown)
   useEffect(() => {
-    if (!currentQuestion) return
+    if (!currentQuestion || showResults) return
     
     timerRef.current = setInterval(() => {
       if (isBuzzerPhase && buzzerStartTime) {
@@ -325,7 +331,7 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
         clearInterval(timerRef.current)
       }
     }
-  }, [currentQuestion, questionStartTime, isBuzzerPhase, buzzerStartTime, timerPhase])
+  }, [currentQuestion, questionStartTime, isBuzzerPhase, buzzerStartTime, timerPhase, showResults])
 
   if (!currentQuestion) {
     return (
@@ -398,18 +404,18 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
                 Question <b>{currentQuestion.questionNumber}</b><span>/{currentQuestion.totalQuestions}</span>
               </span>
               <span className="round-badge-tv">{currentQuestion.roundName || `Round ${currentQuestion.round}`}</span>
-              {currentQuestion.format && <span className="tm-chip">{formatLabel(currentQuestion.format)}</span>}
+              {currentQuestion.format && !sameTag(formatLabel(currentQuestion.format), currentQuestion.roundName) && <span className="tm-chip">{formatLabel(currentQuestion.format)}</span>}
               {currentQuestion.category && <span className="tm-chip soft">{currentQuestion.category}</span>}
             </div>
             <div className="header-actions">
               <div className="points-display">
-                <span className="points-value">+{currentQuestion.points}</span>
+                <span className="points-value">+{currentQuestion.type === 'CLUE' && currentQuestion.pointsNow != null ? currentQuestion.pointsNow : currentQuestion.points}</span>
                 {currentQuestion.negativePoints > 0 && (
                   <span className="negative-value">-{currentQuestion.negativePoints}</span>
                 )}
               </div>
               
-              <TimerRing remaining={timeRemaining} total={totalTime} phase={timerPhase} />
+              <TimerRing remaining={timeRemaining} total={totalTime} phase={timerPhase} stopped={showResults} />
               {userRole === 'host' && (
                 <button
                   onClick={() => { if (window.confirm('End the quiz now? Final results will be shown.')) socket.emit('end-quiz') }}

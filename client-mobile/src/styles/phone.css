@@ -333,3 +333,14 @@
 .quiz-screen .question-badge { height: 26px; padding: 0 10px; gap: 4px; }
 .quiz-screen .question-badge .q-label { background: none; padding: 0; color: var(--ds-muted); font-size: 11px; }
 .quiz-screen .question-badge .q-numbers { padding: 0; font-size: 13px; }
+/* the clock freezes and fades once the host shows the answer */
+.quiz-screen .timer-circular-container-mobile.stopped { opacity: 0.55; }
+.quiz-screen .timer-circular-container-mobile.stopped .timer-progress-mobile { stroke: var(--ds-muted) !important; }
+.ph-revealed {
+  display: grid; gap: 4px; justify-items: center; text-align: center;
+  margin-top: 4px; padding: 16px; border-radius: 18px;
+  background: var(--ds-panel); border: 1px solid var(--ds-border-2);
+  animation: ds-fade-up 0.3s ease-out both;
+}
+.ph-revealed span { font-size: 13px; color: var(--ds-dim); }
+.ph-revealed strong { font-size: 20px; font-weight: 800; color: var(--ds-good); overflow-wrap: anywhere; }
