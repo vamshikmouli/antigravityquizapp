@@ -2,7 +2,7 @@ import { SOCKET_EVENTS } from '../shared/constants.js';
 import { calculateRankings } from '../shared/utils.js';
 import {
   FORMATS, roundConfig, answersMatch, directedPoints, cluePointsFor,
-  CompetitionState, roundSummary, eliminationCandidates, playableCount, eliminationAllowance
+  CompetitionState, roundSummary, eliminationCandidates, planDirectedRound, eliminationAllowance
 } from './competition.js';
 
 /**
@@ -17,17 +17,20 @@ export function createCompetition({ io, prisma, getBuzzerManager, startBuzzerRou
     if (c) return c;
     const s = await prisma.session.findUnique({
       where: { id: sessionId },
-      select: { quiz: { select: { mode: true, roundSettings: true } }, questions: { select: { question: { select: { round: true, type: true } } } } }
+      select: { quiz: { select: { mode: true, roundSettings: true } }, questions: { orderBy: { order: 'asc' }, select: { question: { select: { id: true, round: true, type: true, category: true } } } } }
     });
     const roundTypes = new Map();
+    const roundQuestions = new Map(); // round -> [{ id, category }] in play order
     for (const { question } of s?.questions || []) {
-      if (!roundTypes.has(question.round)) roundTypes.set(question.round, []);
+      if (!roundTypes.has(question.round)) { roundTypes.set(question.round, []); roundQuestions.set(question.round, []); }
       roundTypes.get(question.round).push(question.type);
+      roundQuestions.get(question.round).push({ id: question.id, category: question.category });
     }
     c = {
       mode: s?.quiz?.mode === 'TEAMS' ? 'TEAMS' : 'CLASSIC',
       settings: Array.isArray(s?.quiz?.roundSettings) ? s.quiz.roundSettings : [],
       roundTypes,
+      roundQuestions,
       state: new CompetitionState(),
       timer: null,
       lastRoundEnded: null,
@@ -80,10 +83,10 @@ export function createCompetition({ io, prisma, getBuzzerManager, startBuzzerRou
     return c.roundGroups.get(round);
   }
 
+  /** Which questions of a directed round are played (see planDirectedRound). */
   function roundPlan(c, round, groups) {
-    const total = (c.roundTypes.get(round) || []).length;
-    const playing = playableCount(total, groups);
-    return { groups, total, playing, perGroup: groups ? Math.floor(playing / groups) : playing };
+    const p = planDirectedRound(c.roundQuestions.get(round) || [], groups);
+    return { groups, total: p.total, playing: p.playing, perGroup: p.perGroup, bySubject: p.bySubject, subjects: p.subjects, ids: p.ids };
   }
 
   async function namesByResult(sessionId, questionId) {
@@ -190,7 +193,8 @@ export function createCompetition({ io, prisma, getBuzzerManager, startBuzzerRou
 
       if (cfg.format === FORMATS.DIRECTED) {
         const groups = (await prisma.participant.findMany({ where: { sessionId, eliminatedAt: null }, orderBy: { joinedAt: 'asc' }, select: { id: true, name: true } }));
-        questionData.roundPlan = roundPlan(c, question.round, await groupsForRound(c, sessionId, question.round));
+        const { ids, ...plan } = roundPlan(c, question.round, await groupsForRound(c, sessionId, question.round));
+        questionData.roundPlan = plan;
         const turn = c.state.startDirected(question, groups, cfg);
         if (turn) {
           turn.points = question.points;
@@ -211,22 +215,21 @@ export function createCompetition({ io, prisma, getBuzzerManager, startBuzzerRou
     },
 
     /**
-     * Index of the next question to play. In a DIRECTED round only a multiple of
-     * the group count is played so every group gets the same number of turns;
-     * the leftover questions of that round are skipped.
+     * Index of the next question to play. In a DIRECTED round every group gets
+     * the same number of turns — one per subject when the questions have
+     * subjects — and the questions that don't fit are skipped.
      */
     async nextPlayableIndex(sessionId, questions, index) {
       const c = await load(sessionId);
       if (c.mode !== 'TEAMS') return index;
       let i = index;
       while (i < questions.length) {
-        const round = questions[i].question.round;
-        if (cfgFor(c, round).format !== FORMATS.DIRECTED) return i;
-        const inRound = questions.map((x, j) => (x.question.round === round ? j : -1)).filter((j) => j >= 0);
-        const plan = roundPlan(c, round, await groupsForRound(c, sessionId, round));
-        if (inRound.indexOf(i) < plan.playing) return i;
-        for (const j of inRound.slice(plan.playing)) c.skipped.add(questions[j].question.id);
-        i = inRound[inRound.length - 1] + 1;
+        const q = questions[i].question;
+        if (cfgFor(c, q.round).format !== FORMATS.DIRECTED) return i;
+        const { ids } = roundPlan(c, q.round, await groupsForRound(c, sessionId, q.round));
+        if (ids.has(q.id)) return i;
+        c.skipped.add(q.id);
+        i += 1;
       }
       return i;
     },

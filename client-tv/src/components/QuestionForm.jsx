@@ -20,6 +20,7 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null, 
     imageUrl: editingQuestion?.imageUrl || '',
     optionImages: editingQuestion?.optionImages || (editingQuestion?.options?.length ? editingQuestion.options.map(() => '') : ['', '', '', '']),
     readingTime: editingQuestion?.readingTime || 0,
+    category: editingQuestion?.category || '',
     clues: editingQuestion?.clues?.length ? editingQuestion.clues : ['', '', ''],
     cluePoints: editingQuestion?.cluePoints?.length ? editingQuestion.cluePoints : [30, 20, 10],
     quizId: editingQuestion?.quizId || quizId
@@ -158,6 +159,7 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null, 
           readingTime: Math.max(0, Number(formData.readingTime) || 0),
           points: Math.max(0, Number(formData.points) || 0),
           negativePoints: Math.max(0, Number(formData.negativePoints) || 0),
+          category: String(formData.category || '').trim() || null,
           ...(formData.type === 'CLUE'
             ? (() => {
                 const pairs = formData.clues.map((c, i) => [c.trim(), Number(formData.cluePoints[i]) || 0]).filter(([c]) => c);
@@ -227,6 +229,12 @@ function QuestionForm({ onClose, onSave, editingQuestion = null, quizId = null, 
               </label>
               <span className="ds-hint">Optional — shown on the big screen.</span>
             </div>
+            <label className="ds-field qf-subject">
+              <span className="ds-label">Subject <span className="ds-muted">(optional)</span></span>
+              <input className="ds-input" type="text" value={formData.category} maxLength={40}
+                onChange={(e) => handleChange('category', e.target.value)} placeholder="e.g. Karnataka, Maths, Sports" />
+              <span className="ds-hint">In a group "your turn" round where every question has a subject, each group gets one question from every subject.</span>
+            </label>
           </div>
 
           <div className="qf-section">

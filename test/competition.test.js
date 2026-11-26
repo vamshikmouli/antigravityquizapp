@@ -132,3 +132,31 @@ test('eliminationAllowance: never leaves fewer than 2 groups in', async () => {
   assert.equal(eliminationAllowance(1, 1), 0);
   assert.equal(eliminationAllowance(5, 0), 0);
 });
+
+test('planDirectedRound: one question per subject for each group', async () => {
+  const { planDirectedRound } = await import('../controllers/competition.js');
+  const subjects = ['Karnataka', 'Constitution', 'Maths', 'Sports', 'Science'];
+  const qs = subjects.flatMap((s) => [1, 2, 3, 4, 5].map((n) => ({ id: `${s}${n}`, category: s })));
+  const ids = (g) => [...planDirectedRound(qs, g).ids];
+
+  // 5 groups: everything is played, 5 each (one per subject)
+  assert.equal(ids(5).length, 25);
+  assert.equal(planDirectedRound(qs, 5).perGroup, 5);
+  // 2 groups: first 2 of each subject -> 10 played, 5 each
+  assert.deepEqual(ids(2), subjects.flatMap((s) => [`${s}1`, `${s}2`]));
+  const p2 = planDirectedRound(qs, 2);
+  assert.deepEqual([p2.bySubject, p2.subjects, p2.perGroup, p2.playing, p2.total], [true, 5, 5, 10, 25]);
+  // 3 groups: first 3 of each subject
+  assert.equal(ids(3).length, 15);
+  // subjects are matched case/space-insensitively
+  assert.equal(planDirectedRound([{ id: 'a', category: 'Maths' }, { id: 'b', category: ' maths ' }, { id: 'c', category: 'Sports' }], 1).ids.size, 2);
+});
+
+test('planDirectedRound: without subjects it falls back to equal turns', async () => {
+  const { planDirectedRound } = await import('../controllers/competition.js');
+  const plain = [1, 2, 3, 4, 5].map((n) => ({ id: `q${n}`, category: null }));
+  assert.deepEqual([...planDirectedRound(plain, 2).ids], ['q1', 'q2', 'q3', 'q4']);
+  // one subject only, or some questions missing a subject: not a subject round
+  assert.equal(planDirectedRound(plain.map((q) => ({ ...q, category: 'GK' })), 2).bySubject, false);
+  assert.equal(planDirectedRound([{ id: 'a', category: 'Maths' }, { id: 'b', category: null }, { id: 'c', category: 'Sports' }], 2).bySubject, false);
+});
