@@ -100,3 +100,30 @@ test('parsePlan allows up to 30 questions in a round (generated in batches)', ()
   assert.ok(plan.warnings.some((w) => /Round 2: limited to 30/.test(w)));
   assert.ok(!plan.warnings.some((w) => /Round 1:/.test(w)));
 });
+
+test('generateInBatches: 25 questions from a model that returns short lists', async () => {
+  const { generateInBatches } = await import('../controllers/aiQuestions.js');
+  let id = 0;
+  const calls = [];
+  // Like the real models: asked for many, returns at most 12 per request.
+  const ask = async (want, part) => { calls.push([want, part]); return Array.from({ length: Math.min(want, 12) }, () => ({ text: `Q${++id}` })); };
+  const qs = await generateInBatches({ total: 25, ask });
+  assert.equal(qs.length, 25);
+  assert.ok(calls.every(([want]) => want <= 15));
+  assert.match(calls[1][1], /questions 13–/); // later requests say where to continue
+});
+
+test('generateInBatches: drops repeats, stops when nothing new, keeps partial results on later errors', async () => {
+  const { generateInBatches } = await import('../controllers/aiQuestions.js');
+  // Always returns the same 3 questions: no endless loop, no duplicates.
+  const same = async () => [{ text: 'A' }, { text: 'a ' }, { text: 'B' }];
+  assert.deepEqual((await generateInBatches({ total: 10, ask: same })).map((q) => q.text), ['A', 'B']);
+  // Second request fails: the first batch is still returned.
+  let n = 0;
+  const flaky = async (want) => { if (n++) throw Object.assign(new Error('busy'), { status: 503 }); return Array.from({ length: want }, (_, i) => ({ text: `F${i}` })); };
+  assert.equal((await generateInBatches({ total: 25, ask: flaky })).length, 15);
+  // First request fails: the error is passed on (so the user sees why).
+  await assert.rejects(generateInBatches({ total: 5, ask: async () => { throw new Error('bad key'); } }), /bad key/);
+  // Questions passed in "avoid" are not returned again.
+  assert.deepEqual((await generateInBatches({ total: 2, avoid: ['Old'], ask: async () => [{ text: 'old' }, { text: 'New' }] })).map((q) => q.text), ['New']);
+});
