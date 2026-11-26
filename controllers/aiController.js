@@ -67,7 +67,7 @@ export async function planQuiz(req, res) {
     const raw = await callProvider(p, buildPlanPrompt({ prompt: text }), res);
     if (raw == null) return;
 
-    const plan = parsePlan(raw, { fallbackTopic: text.slice(0, 200) });
+    const plan = parsePlan(raw, { fallbackTopic: text.slice(0, 200), prompt: text });
     if (!plan) {
       return res.status(422).json({ error: 'The AI could not understand that request. Try describing the rounds more plainly.' });
     }

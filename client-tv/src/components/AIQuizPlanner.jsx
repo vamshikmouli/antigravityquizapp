@@ -2,7 +2,7 @@ import { Fragment, useState } from 'react';
 
 import { QUESTION_TYPES as ALL_TYPES, TYPE_INFO } from '../lib/questionTypes';
 // AI writes ordinary question types; clue questions are written by hand.
-const QUESTION_TYPES = ALL_TYPES.filter((t) => t.value !== 'CLUE');
+const QUESTION_TYPES = ALL_TYPES; // includes clue questions (3 clues, hardest first)
 export { QUESTION_TYPES, TYPE_INFO };
 const DIFFICULTIES = ['easy', 'medium', 'hard'];
 const MAX_TOTAL = 60;
@@ -93,6 +93,13 @@ export function QuestionItem({ q, index, onToggle }) {
  *   4. review drafts -> save selected via the normal import flow.
  * Renders the modal's stepper, scrollable body and footer.
  */
+const ROUND_FORMATS = [
+  { value: 'DIRECTED', label: 'Your turn (one group per question)' },
+  { value: 'ALL', label: 'Everyone answers' },
+  { value: 'BUZZER', label: 'Buzzer' },
+  { value: 'CLUE', label: 'Clue round' }
+];
+
 export default function AIQuizPlanner({ quizId, startRound = 1, provider, authHeader, onSaved, onClose }) {
   const [step, setStep] = useState('prompt'); // prompt | plan | review
   const [prompt, setPrompt] = useState('');
@@ -139,7 +146,8 @@ export default function AIQuizPlanner({ quizId, startRound = 1, provider, authHe
       ...p,
       rounds: [...p.rounds, {
         name: `Round ${p.rounds.length + 1}`, topic: p.topic || '', type: 'MULTIPLE_CHOICE', count: 5,
-        difficulty: 'medium', timeLimit: 30, readingTime: 0, points: 100, negativePoints: 0
+        difficulty: 'medium', timeLimit: 30, readingTime: 0, points: 100, negativePoints: 0,
+        format: 'DIRECTED', passOnWrong: true, eliminate: 0
       }]
     }));
 
@@ -226,6 +234,26 @@ export default function AIQuizPlanner({ quizId, startRound = 1, provider, authHe
     try {
       const questions = selected.map(({ _include, ...q }) => ({ ...q, quizId }));
       await post('/api/questions/import-json', { questions });
+      // Group competition: switch the quiz to group mode with each round's
+      // format, passing and elimination (other rounds' settings are kept).
+      if (plan.groupMode) {
+        const quiz = await fetch(`/api/quizzes/${quizId}`, { headers: authHeader }).then((r) => r.json()).catch(() => ({}));
+        const numbers = plan.rounds.map((_, i) => Number(firstRound) + i);
+        const keep = (Array.isArray(quiz.roundSettings) ? quiz.roundSettings : []).filter((s) => !numbers.includes(Number(s.round)));
+        const roundSettings = [...keep, ...plan.rounds.map((r, i) => ({
+          round: Number(firstRound) + i,
+          name: r.name,
+          format: r.format || 'DIRECTED',
+          passOnWrong: (r.format || 'DIRECTED') === 'DIRECTED' && r.passOnWrong !== false,
+          passPercent: 50,
+          eliminate: Number(r.eliminate) || 0
+        }))].sort((a, b) => a.round - b.round);
+        const res = await fetch(`/api/quizzes/${quizId}/competition`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json', ...authHeader },
+          body: JSON.stringify({ mode: 'TEAMS', roundSettings })
+        });
+        if (!res.ok) throw new Error('Questions saved, but group settings could not be applied — open Groups to set them.');
+      }
       onSaved?.();
       onClose?.();
     } catch (err) {
@@ -311,6 +339,14 @@ export default function AIQuizPlanner({ quizId, startRound = 1, provider, authHe
               </div>
             </div>
 
+            <label className="ai-group-toggle">
+              <input type="checkbox" checked={Boolean(plan.groupMode)} onChange={(e) => setPlan((p) => ({ ...p, groupMode: e.target.checked }))} />
+              <span>
+                <b>Group competition</b>
+                <small>Groups take turns, buzz in and can be eliminated. Saving switches this quiz to group mode with the settings below.</small>
+              </span>
+            </label>
+
             {rounds.map((r, i) => {
               const info = TYPE_INFO[r.type] || TYPE_INFO.MULTIPLE_CHOICE;
               return (
@@ -342,6 +378,28 @@ export default function AIQuizPlanner({ quizId, startRound = 1, provider, authHe
                   <NumField label="Minus" variant="minus" value={r.negativePoints} onChange={(v) => updateRound(i, { negativePoints: v })} />
                   <button type="button" className="ai-icon-btn" title="Remove round" aria-label="Remove round"
                     disabled={rounds.length <= 1} onClick={() => removeRound(i)}>✕</button>
+                  {plan.groupMode && (
+                    <div className="ai-round-group">
+                      <label className="ai-field">
+                        <span>Format</span>
+                        <select value={r.format || 'DIRECTED'} onChange={(e) => updateRound(i, { format: e.target.value })}>
+                          {ROUND_FORMATS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+                        </select>
+                      </label>
+                      {(r.format || 'DIRECTED') === 'DIRECTED' && (
+                        <label className="ai-check">
+                          <input type="checkbox" checked={r.passOnWrong !== false} onChange={(e) => updateRound(i, { passOnWrong: e.target.checked })} />
+                          Pass on wrong answer
+                        </label>
+                      )}
+                      <label className="ai-field">
+                        <span>Eliminate after</span>
+                        <select value={Number(r.eliminate) || 0} onChange={(e) => updateRound(i, { eliminate: Number(e.target.value) })}>
+                          {[0, 1, 2, 3].map((n) => <option key={n} value={n}>{n ? `${n} group${n > 1 ? 's' : ''}` : 'None'}</option>)}
+                        </select>
+                      </label>
+                    </div>
+                  )}
                 </div>
               );
             })}

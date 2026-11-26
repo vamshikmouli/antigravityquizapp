@@ -15,8 +15,19 @@ const TYPE_HINTS = {
   TRUE_FALSE: 'options ["True","False"] and a "correctAnswer" of either "True" or "False"',
   SHORT_ANSWER: 'an empty "options" array and a concise "correctAnswer" string',
   ORAL_OPEN: 'an empty "options" array and a "correctAnswer" string (the model answer)',
-  ORAL_BUZZER: 'an empty "options" array and a "correctAnswer" string (the model answer)'
+  ORAL_BUZZER: 'an empty "options" array and a "correctAnswer" string (the model answer)',
+  CLUE: 'an empty "options" array, a "text" of "Who am I?" or "What am I?", a "clues" array of exactly 3 short clues ordered ' +
+    'from HARDEST to EASIEST (never containing the answer itself), and the "correctAnswer"'
 };
+
+/** Clue points from the full points: 3 clues worth 30 -> [30, 20, 10]. */
+export function cluePointsFrom(points, n = 3) {
+  const top = Math.max(1, Number(points) || 30);
+  return Array.from({ length: Math.max(1, n) }, (_, i) => Math.max(1, Math.round((top * (n - i)) / n)));
+}
+
+// "Clue 2: It is…", "2) It is…", ": It is…" -> "It is…"
+const cleanClue = (s) => String(s ?? '').replace(/^\s*(?:clue\s*\d*\s*[:.\-)\]]?|\d+\s*[:.)\]]|[:.\-)\]]+)\s*/i, '').trim();
 
 /** Most questions asked of the model in one request (bigger asks come back short). */
 export const GENERATION_BATCH = 15;
@@ -77,7 +88,8 @@ export function buildGenerationPrompt({ topic, count, type, difficulty, context,
   const system =
     'You are a quiz author. You generate accurate, unambiguous quiz questions and ' +
     'respond with STRICT JSON only — no markdown, no commentary. ' +
-    'The JSON shape is: {"questions":[{"text":string,"options":string[],"correctAnswer":string,"category":string}]}.';
+    'The JSON shape is: {"questions":[{"text":string,"options":string[],"correctAnswer":string,"category":string' +
+    (t === 'CLUE' ? ',"clues":string[]' : '') + '}]}.';
 
   const user =
     `Generate ${count} ${difficulty} difficulty quiz question(s) of type ${t} about: ${topic}.\n` +
@@ -85,6 +97,9 @@ export function buildGenerationPrompt({ topic, count, type, difficulty, context,
     'Keep "text" clear and self-contained. "category" is a short topic label. ' +
     (t === 'BUZZER' || t === 'ORAL_BUZZER'
       ? 'These are buzzer questions: keep them short enough to read in a few seconds, with one crisp answer. '
+      : '') +
+    (t === 'CLUE'
+      ? 'These are clue questions: clues are revealed one at a time, so clue 1 must be the hardest and clue 3 the easiest. '
       : '') +
     (context ? `Context: ${String(context).slice(0, 300)}.\n` : '') +
     (Array.isArray(avoid) && avoid.length
@@ -145,6 +160,13 @@ function normalizeQuestion(item, type) {
     category: typeof item.category === 'string' && item.category.trim() ? item.category.trim() : 'General',
     optionImages: []
   };
+
+  if (type === 'CLUE') {
+    q.options = [];
+    q.clues = (Array.isArray(item.clues) ? item.clues : []).map(cleanClue).filter(Boolean).slice(0, 5);
+    q.cluePoints = cluePointsFrom(q.points, q.clues.length || 3);
+    if (!q.text) q.text = 'Who am I?';
+  }
 
   if (type === 'TRUE_FALSE') {
     q.options = ['True', 'False'];
