@@ -49,6 +49,7 @@ export class BuzzerManager {
     this.marginMs = null;
     this.answered = false;
     this.overridden = false;
+    this.tried = new Set();      // participants who already had their turn (answered wrong / timed out)
   }
 
   // ---- compatibility with older call sites ----
@@ -100,7 +101,8 @@ export class BuzzerManager {
    *   'ignored'     – no round / wrong round / duplicate / not open
    *   'false_start' – pressed while armed, self-reported, or too fast (locked out)
    *   'accepted'    – counted; firstValid=true for the first one (start the window)
-   *   'late'        – arrived after the winner was decided
+   *   'queued'      – arrived after the winner was decided: joins the line (next chance if the winner is wrong)
+   *   'late'        – arrived after the winner was decided but not counted (rejected)
    */
   press({ participantId, participantName, roundId, reactionMs, falseStart, arrivedAt = Date.now(), stats }) {
     const base = { participantId, participantName, roundId, arrivedAt, reactionMs: reactionMs ?? null };
@@ -119,9 +121,17 @@ export class BuzzerManager {
     }
 
     if (this.phase === 'decided') {
+      // The buzzer stays open for everyone: a later press joins the line.
       const judged = this._judge(participantId, reactionMs, arrivedAt, stats);
-      this.log.push({ ...base, ...judged, outcome: 'LATE' });
-      return { status: 'late', judged };
+      if (judged.rejected) {
+        this.log.push({ ...base, ...judged, outcome: 'LATE' });
+        return { status: 'late', judged };
+      }
+      const entry = { ...base, ...judged };
+      this.presses.set(participantId, entry);
+      this.ranking.push(entry);
+      this.log.push({ ...entry, outcome: 'QUEUED' });
+      return { status: 'queued', judged, position: this.ranking.length };
     }
 
     // phase === 'open'
@@ -183,6 +193,22 @@ export class BuzzerManager {
     return this.result();
   }
 
+  /**
+   * The current group answered wrong (or ran out of time): give the turn to
+   * the next group in line, fastest first. Returns the new result, or null
+   * when nobody is left in line.
+   */
+  nextInLine(wrongId) {
+    if (this.phase !== 'decided') return null;
+    if (wrongId) this.tried.add(wrongId);
+    const next = this.ranking.find((p) => !this.tried.has(p.participantId) && p.participantId !== this.firstBuzzer?.participantId);
+    if (!next) return null;
+    this.firstBuzzer = { participantId: next.participantId, participantName: next.participantName, timestamp: next.arrivedAt };
+    this.answered = false;
+    this.clearAnswerTimeout();
+    return { ...this.result(), nextInLine: true };
+  }
+
   /** Host re-awards the buzz to another valid presser of this round. */
   override(participantId) {
     if (this.phase !== 'decided' || this.answered) return { ok: false, reason: 'NOT_OVERRIDABLE' };
@@ -214,11 +240,19 @@ export class BuzzerManager {
         flags: w.flags,
         overridden: this.overridden
       } : null,
-      ranking: this.ranking.slice(0, 5).map((p) => ({
+      ranking: this.ranking.slice(0, 10).map((p) => ({
         participantId: p.participantId,
         participantName: p.participantName,
         reactionMs: p.effectiveMs,
         flags: p.flags
+      })),
+      // The line: everyone who buzzed, fastest first; who is answering, who already tried.
+      queue: this.ranking.map((p) => ({
+        participantId: p.participantId,
+        participantName: p.participantName,
+        reactionMs: p.effectiveMs,
+        current: p.participantId === winnerId,
+        tried: this.tried.has(p.participantId)
       })),
       falseStarts: this.lockedOut.size
     };

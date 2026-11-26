@@ -673,11 +673,26 @@ function decidedBuzz(sessionId, questionId) {
   return bm.result();
 }
 
+/** The turn moved to the next group in line: tell everyone and start their answer clock. */
+function announceNextInLine(bm, sessionCode, result) {
+  io.to(sessionCode).emit(SOCKET_EVENTS.BUZZER_WINNER, result);
+  io.to(sessionCode).emit(SOCKET_EVENTS.BUZZER_LOCKED, { winnerId: result.winner.participantId });
+  startBuzzerAnswerTimer(bm, sessionCode);
+}
+
 function startBuzzerAnswerTimer(bm, sessionCode) {
   // Clue round: the host judges the spoken answer, so no auto-reopen timer.
   if (competition.isClueInPlay(bm.sessionId)) return;
   bm.setAnswerTimeout(() => {
-    // Winner didn't answer in time: reopen the question to everyone.
+    // Winner didn't answer in time: the next group in line gets the chance.
+    const timedOut = bm.firstBuzzer;
+    const next = bm.nextInLine(timedOut?.participantId);
+    if (next) {
+      if (timedOut) io.to(sessionCode).emit(SOCKET_EVENTS.TURN_RESULT, { questionId: bm.questionId, participantId: timedOut.participantId, name: timedOut.participantName, isCorrect: false, points: 0, timedOut: true });
+      announceNextInLine(bm, sessionCode, next);
+      return;
+    }
+    // Nobody left in line: reopen the question to everyone.
     bm.deactivate();
     io.to(sessionCode).emit(SOCKET_EVENTS.BUZZER_TIMEOUT, {
       message: 'Buzzer winner did not answer in time. Question reopened to all.'
@@ -1346,6 +1361,15 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
         maybeCloseBuzzerEarly(sessionId, sessionCode);
         return;
       }
+      if (result.status === 'queued') {
+        // Joined the line behind the current group: everyone sees the updated line.
+        socket.emit('buzz-queued', { questionId: bm.questionId, position: result.position });
+        io.to(sessionCode).emit('buzz-queue', { questionId: bm.questionId, queue: bm.result().queue });
+        const ctx = { sessionId, questionId: bm.questionId, tenantId: bm.tenantId };
+        const pressLog = bm.getAllPresses().slice(-1);
+        bm.enqueuePersist(() => buzzerAudit.record(pressLog, ctx));
+        return;
+      }
       if (result.status === 'late') {
         const log = bm.getAllPresses();
         const late = log.slice(-1);
@@ -1460,7 +1484,14 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
       // Clear buzzer timeout if this was a buzzer question
       const buzzerManager = getBuzzerManager(sessionId);
       if (buzzerManager.locked && buzzerManager.firstBuzzer?.participantId === participantId) {
-        buzzerManager.markAnswered(); // stops the answer timer and freezes overrides
+        // Wrong answer: the next group in line gets the chance (if anyone is waiting).
+        const next = !result.isCorrect ? buzzerManager.nextInLine(participantId) : null;
+        if (next) {
+          await emitVerdict(sessionCode, { questionId, participantId, isCorrect: false, points: result.points });
+          announceNextInLine(buzzerManager, sessionCode, next);
+        } else {
+          buzzerManager.markAnswered(); // stops the answer timer and freezes overrides
+        }
       }
       
       // Send result to student
@@ -1568,6 +1599,19 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
         questionId,
         'Incorrect_Oral_Answer'
       );
+
+      // Someone else is waiting in the buzz line: they get the chance now.
+      const line = getBuzzerManager(sessionId);
+      const next = line.questionId === questionId ? line.nextInLine(participantId) : null;
+      if (next) {
+        const wrongSocket = Array.from(io.sockets.sockets.values()).find((s) => s.data.participantId === participantId && s.data.sessionId === sessionId);
+        wrongSocket?.emit(SOCKET_EVENTS.ANSWER_RECEIVED, { isCorrect: false, points: result.points });
+        await emitVerdict(sessionCode, { questionId, participantId, isCorrect: false, points: result.points });
+        announceNextInLine(line, sessionCode, next);
+        const lb = await sessionController.getParticipants(sessionId);
+        io.to(sessionCode).emit(SOCKET_EVENTS.LEADERBOARD_UPDATE, { leaderboard: calculateRankings(lb) });
+        return;
+      }
 
       // Reopen buzzer for others if we want, or just end it?
       // Usually in buzzer rounds, if one is wrong, others can buzz or it's dead.

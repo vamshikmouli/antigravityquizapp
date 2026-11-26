@@ -359,3 +359,10 @@
 .ph-held strong { font-size: 18px; color: var(--ds-text); }
 .ph-held span { font-size: 14px; color: var(--ds-dim); }
 .ph-paused { margin: 8px 0; padding: 8px 14px; border-radius: 999px; text-align: center; font-weight: 800; color: #fff; background: #f59e0b; }
+
+/* buzz line: the buzzer stays open after the first buzz */
+.bz-line { margin: 4px 0 0; padding: 8px 14px; border-radius: 999px; background: var(--ds-accent-soft); color: var(--ds-text); font-size: 14px; }
+.bz-join { display: grid; justify-items: center; gap: 4px; width: 100%; }
+.bz-join .buzzer-container { padding-top: 4px; }
+.bz-join .bz-stage { width: 170px; height: 170px; }
+.bz-join .buzzer-button { width: 156px; height: 156px; }
