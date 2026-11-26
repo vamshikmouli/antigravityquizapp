@@ -18,6 +18,54 @@ const TYPE_HINTS = {
   ORAL_BUZZER: 'an empty "options" array and a "correctAnswer" string (the model answer)'
 };
 
+/** Most questions asked of the model in one request (bigger asks come back short). */
+export const GENERATION_BATCH = 15;
+
+/**
+ * Collect `total` questions from a model that may return fewer than asked.
+ * Asks in batches of `batch`, tops up any shortfall with extra requests, and
+ * drops repeats. `ask(want, part, avoid)` returns parsed questions or throws;
+ * `part` describes which question numbers this request covers. If a later
+ * request fails, the questions already collected are returned; if the very
+ * first one fails, its error is thrown.
+ */
+export async function generateInBatches({ total, ask, avoid = [], batch = GENERATION_BATCH, maxExtraRequests = 2 }) {
+  const n = Math.max(1, total | 0);
+  const out = [];
+  const seen = new Set(avoid.map((t) => normText(t)));
+  const avoidTexts = [...avoid];
+  const maxRequests = Math.ceil(n / batch) + maxExtraRequests;
+  for (let req = 0; req < maxRequests && out.length < n; req++) {
+    const want = Math.min(batch, n - out.length);
+    const part = n > batch || req > 0
+      ? `write questions ${out.length + 1}–${out.length + want} of the ${n} in this round, continuing the order the round asks for`
+      : '';
+    let got;
+    try {
+      got = await ask(want, part, avoidTexts.slice(-40));
+    } catch (err) {
+      if (out.length) break;
+      throw err;
+    }
+    let added = 0;
+    for (const q of got || []) {
+      const key = normText(q.text);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      avoidTexts.push(q.text);
+      out.push(q);
+      added += 1;
+      if (out.length >= n) break;
+    }
+    if (!added && req >= Math.ceil(n / batch)) break; // the model has nothing new to give
+  }
+  return out;
+}
+
+function normText(t) {
+  return String(t ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
 /**
  * Build the { system, user } messages instructing the model to return strict
  * JSON: { "questions": [ { text, options, correctAnswer, category }, ... ] }.
@@ -41,7 +89,7 @@ export function buildGenerationPrompt({ topic, count, type, difficulty, context,
     (context ? `Context: ${String(context).slice(0, 300)}.\n` : '') +
     (Array.isArray(avoid) && avoid.length
       ? 'Do NOT repeat or closely paraphrase any of these existing questions:\n' +
-        avoid.slice(0, 40).map((q) => `- ${String(q).slice(0, 160)}`).join('\n') + '\n'
+        avoid.slice(-40).map((q) => `- ${String(q).slice(0, 160)}`).join('\n') + '\n'
       : '') +
     'Return ONLY the JSON object described, with exactly a "questions" array.';
 
