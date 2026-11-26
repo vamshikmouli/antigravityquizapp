@@ -167,7 +167,7 @@ test('stale open() from a previous question does nothing', () => {
   m.deactivate();
 });
 
-test('full round: later-arriving faster finger wins; late press logged; override', () => {
+test('full round: later-arriving faster finger wins; later press joins the line; override', () => {
   const { m, roundId } = openRound();
   m.open(roundId, 1000);
   const fast = simulate({ down: 15, up: 15, render: 10, reaction: 260 });
@@ -185,8 +185,12 @@ test('full round: later-arriving faster finger wins; late press logged; override
   assert.equal(res.winner.participantId, 'slowNet');
   assert.equal(res.fairness.marginMs, 60);
   assert.equal(m.locked, true);
-  assert.equal(m.press({ participantId: 'p3', roundId, reactionMs: 300 }).status, 'late');
-  assert.deepEqual(m.getAllPresses().map((e) => e.outcome), ['LOST', 'WON', 'LATE']);
+  // The buzzer stays open: a press after the decision joins the line
+  const q = m.press({ participantId: 'p3', participantName: 'C', roundId, reactionMs: 300 });
+  assert.equal(q.status, 'queued');
+  assert.equal(q.position, 3);
+  assert.deepEqual(m.getAllPresses().map((e) => e.outcome), ['LOST', 'WON', 'QUEUED']);
+  assert.deepEqual(m.result().queue.map((e) => [e.participantId, e.current]), [['slowNet', true], ['fastNet', false], ['p3', false]]);
 
   assert.equal(m.override('nobody').ok, false);
   const o = m.override('fastNet');
@@ -196,6 +200,22 @@ test('full round: later-arriving faster finger wins; late press logged; override
   assert.equal(o.result.fairness.overridden, true);
   m.markAnswered();
   assert.equal(m.override('slowNet').ok, false);
+  m.deactivate();
+});
+
+test('wrong answer passes the question down the buzz line, fastest first', () => {
+  const { m, roundId } = openRound();
+  m.open(roundId, 1000);
+  m.press({ participantId: 'A', participantName: 'A', roundId, reactionMs: 250 });
+  m.press({ participantId: 'B', participantName: 'B', roundId, reactionMs: 400 });
+  assert.equal(m.decide().winner.participantId, 'A');
+  m.press({ participantId: 'C', participantName: 'C', roundId, reactionMs: 600 });
+  const n1 = m.nextInLine('A');
+  assert.equal(n1.winner.participantId, 'B');
+  assert.equal(n1.nextInLine, true);
+  assert.deepEqual(n1.queue.map((e) => [e.participantId, e.tried, e.current]), [['A', true, false], ['B', false, true], ['C', false, false]]);
+  assert.equal(m.nextInLine('B').winner.participantId, 'C');
+  assert.equal(m.nextInLine('C'), null, 'nobody left in line');
   m.deactivate();
 });
 

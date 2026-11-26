@@ -750,3 +750,11 @@ body:has(.question-display-tv .global-music-controls.inline) .global-music-contr
 .question-display-tv .release-btn { background: var(--ds-grad); color: #fff; font-size: 1.05em !important; padding: 0.8em 1.6em !important; }
 .question-display-tv .pause-btn { background: #f59e0b; color: #fff; }
 .question-display-tv .readaloud-btn { background: var(--ds-panel-2); color: var(--ds-dim); font-weight: 650; }
+
+/* Buzz line: everyone who buzzed after the first, fastest first */
+.buzz-line { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; margin-top: 10px; }
+.buzz-line small { color: var(--ds-muted); text-transform: uppercase; letter-spacing: .08em; font-size: 12px; margin-right: 4px; }
+.buzz-line span { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: var(--ds-surface-2, rgba(255,255,255,.06)); border: 1px solid var(--ds-border, rgba(255,255,255,.12)); font-weight: 600; }
+.buzz-line span b { font-size: 12px; opacity: .7; }
+.buzz-line span.now { background: var(--ds-accent-soft); border-color: var(--ds-accent); }
+.buzz-line span.done { text-decoration: line-through; opacity: .5; }

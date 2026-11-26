@@ -215,13 +215,18 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
       audioManager?.play('QUESTION')
     })
     
+    // The buzz line grew: later buzzers wait their turn
+    socket.on('buzz-queue', (data) => setBuzzResult((prev) => (prev ? { ...prev, queue: data.queue || [] } : prev)))
+
     // Buzzer winner
     socket.on('buzzer-winner', (data) => {
       setBuzzerWinner(data.winner)
       setBuzzResult({
         fairness: data.fairness || null,
         ranking: data.ranking || [],
-        falseStarts: data.falseStarts || 0
+        falseStarts: data.falseStarts || 0,
+        queue: data.queue || [],
+        nextInLine: Boolean(data.nextInLine)
       })
       setBuzzerStartTime(Date.now())
       setIsBuzzerPhase(true)
@@ -337,6 +342,7 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
     return () => {
       socket.off('question-started')
       socket.off('buzzer-winner')
+      socket.off('buzz-queue')
       socket.off('leaderboard-update')
       socket.off('show-results')
       socket.off('round-ended')
@@ -581,7 +587,7 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
                 <div className="buzz-winner-card" key={buzzerWinner.participantId}>
                   <span className="buzz-winner-avatar">{buzzerWinner.participantName?.charAt(0).toUpperCase()}<i><Icon name="bell" /></i></span>
                   <div className="buzz-winner-text">
-                    <small>{buzzResult?.fairness?.overridden ? 'Awarded by host' : 'First to buzz'}</small>
+                    <small>{buzzResult?.fairness?.overridden ? 'Awarded by host' : buzzResult?.nextInLine ? 'Next in line' : 'First to buzz'}</small>
                     <strong>{buzzerWinner.participantName}</strong>
                   </div>
                   {buzzResult?.fairness?.reactionMs != null && (
@@ -590,6 +596,17 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
                       {buzzResult.fairness.marginMs != null && <span>ahead by <b>{buzzResult.fairness.marginMs}</b> ms</span>}
                     </div>
                   )}
+                </div>
+              )}
+              {/* The buzz line: everyone who buzzed, fastest first; wrong ones struck through */}
+              {buzzerWinner && buzzResult?.queue?.length > 1 && !showResults && (
+                <div className="buzz-line" aria-live="polite">
+                  <small>Buzz line</small>
+                  {buzzResult.queue.map((q, i) => (
+                    <span key={q.participantId} className={q.current ? 'now' : q.tried ? 'done' : ''}>
+                      <b>{i + 1}</b> {q.participantName}
+                    </span>
+                  ))}
                 </div>
               )}
             </div>
@@ -770,7 +787,10 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
                     })}
                     className="control-btn incorrect-btn-large"
                   >
-                    <Icon name="x" /> Mark wrong
+                    <Icon name="x" /> {(() => {
+                      const nxt = (buzzResult?.queue || []).find((q) => !q.current && !q.tried)
+                      return nxt ? `Mark wrong · next: ${nxt.participantName}` : 'Mark wrong'
+                    })()}
                   </button>
                 </div>
               )}

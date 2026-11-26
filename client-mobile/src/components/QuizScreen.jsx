@@ -229,7 +229,9 @@ function QuizScreen({ socket, participantData, initialGameState }) {
     // Buzzer winner (also re-sent if the host re-awards the buzz)
     socket.on('buzzer-winner', (data) => {
       setBuzzerWinner(data.winner)
-      setBuzzResult({ fairness: data.fairness || null, ranking: data.ranking || [] })
+      setBuzzResult({ fairness: data.fairness || null, ranking: data.ranking || [], queue: data.queue || [], nextInLine: Boolean(data.nextInLine) })
+      // The previous group was wrong and it's now my turn: start fresh
+      if (data.nextInLine && data.winner.participantId === participantData.id) { setAnswerSubmitted(false); setFeedback(null) }
       setBuzzerLocked(true)
       setBuzzerStartTime(Date.now())
       setTimerPhase('BUZZER')
@@ -240,6 +242,9 @@ function QuizScreen({ socket, participantData, initialGameState }) {
       setCanAnswer(data.winner.participantId === participantData.id)
     })
     
+    // The buzz line changed (someone joined it)
+    socket.on('buzz-queue', (data) => setBuzzResult((prev) => (prev ? { ...prev, queue: data.queue || [] } : prev)))
+
     // Buzzer locked
     socket.on('buzzer-locked', (data) => {
       setBuzzerLocked(true)
@@ -296,6 +301,7 @@ function QuizScreen({ socket, participantData, initialGameState }) {
       socket.off('clue-reopened')
       socket.off('round-ended')
       socket.off('round-summary-updated')
+      socket.off('buzz-queue')
       socket.off('question-released')
       socket.off('timer-paused')
       socket.off('timer-resumed')
@@ -543,7 +549,7 @@ function QuizScreen({ socket, participantData, initialGameState }) {
             return won ? (
               <div className={`bz-result won ${currentQuestion.options?.length ? 'compact' : ''}`}>
                 <div className="bz-result-icon">🏆</div>
-                <h3>You buzzed first!</h3>
+                <h3>{buzzResult?.nextInLine ? 'Your turn — answer now!' : 'You buzzed first!'}</h3>
                 {theirs != null && (
                   <div className="bz-result-chips">
                     <span><b>{theirs}</b> ms reaction</span>
@@ -559,7 +565,7 @@ function QuizScreen({ socket, participantData, initialGameState }) {
             ) : (
               <div className="bz-result">
                 <div className="bz-result-avatar">{buzzerWinner.participantName?.charAt(0).toUpperCase()}</div>
-                <h3>{buzzerWinner.participantName} buzzed first</h3>
+                <h3>{buzzResult?.nextInLine ? `${buzzerWinner.participantName} is answering` : `${buzzerWinner.participantName} buzzed first`}</h3>
                 {mine && theirs != null && (
                   <div className="bz-compare">
                     <div><span>{buzzerWinner.participantName}</span><i style={{ width: `${Math.max(8, (theirs / slowest) * 100)}%` }} /><b>{theirs} ms</b></div>
@@ -567,7 +573,19 @@ function QuizScreen({ socket, participantData, initialGameState }) {
                   </div>
                 )}
                 {!mine && buzzerPhase === 'falseStart' && <p className="bz-result-note bad">You were locked out (false start).</p>}
-                <p className="bz-result-note">Waiting for their answer…</p>
+                {(() => {
+                  // The buzzer stays open: buzz now to get in line, or see your place in it
+                  const line = (buzzResult?.queue || []).filter((q) => !q.tried)
+                  const myPlace = line.findIndex((q) => q.participantId === participantData.id)
+                  if (myPlace > 0) return <p className="bz-line">You're <b>#{myPlace + 1}</b> in line{myPlace === 1 ? ' — you answer next if they are wrong' : ''}</p>
+                  if (buzzerPhase === 'open' && !revealed && !feedback) return (
+                    <div className="bz-join">
+                      <p className="bz-result-note">Buzz now to get in line — you answer if they are wrong.</p>
+                      <BuzzerButton phase={buzzerPhase} onPress={handleBuzzerPress} timeRemaining={timeRemaining} />
+                    </div>
+                  )
+                  return <p className="bz-result-note">Waiting for their answer…</p>
+                })()}
               </div>
             )
           })()}
