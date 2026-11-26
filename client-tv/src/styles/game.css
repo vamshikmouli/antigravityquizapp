@@ -625,3 +625,28 @@ body:has(.question-display-tv .global-music-controls.inline) .global-music-contr
   .marks-row.head { display: none; }
   .marks-ans { grid-column: 1 / -1; order: 5; }
 }
+
+/* ---- host buttons are always reachable -------------------------------- */
+/* Tall content (picture + long question + revealed answer) used to push the
+   host bar off the bottom of the screen. The column scrolls if it must, and
+   the host bar stays pinned to the bottom. */
+.question-display-tv .main-content { overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; padding-bottom: 2px; }
+.question-display-tv .host-controls { position: sticky; bottom: 0; z-index: 20; margin-top: auto; }
+.question-display-tv .detailed-results-host { position: sticky; bottom: 0; z-index: 19; }
+/* questions with a picture: smaller picture and text so it all fits */
+.question-display-tv .question-card:has(.question-image-tv) { padding: 1em 1.6em; gap: 0.6em; }
+.question-display-tv .question-image-tv img { max-height: 26vh; }
+.question-display-tv .question-card:has(.question-image-tv) .question-text-tv { font-size: clamp(22px, 2.1vw, 48px); }
+.question-display-tv .results-row-wrapper { flex: none; }
+.question-display-tv .revealed-answer-box { font-size: clamp(22px, 2vw, 44px); padding: 0.3em 1em; }
+@media (max-height: 760px) {
+  .question-display-tv .question-image-tv img { max-height: 20vh; }
+}
+/* oral panels and buzz details keep their natural (compact) size; the
+   column scrolls if needed and the host bar stays pinned */
+.question-display-tv .oral-buzzer-info, .question-display-tv .oral-open-container,
+.question-display-tv .buzz-review { flex: none; overflow: visible; min-height: auto; }
+.question-display-tv .oral-buzzer-info { padding: 0.9em 1.2em; }
+.question-display-tv .oral-buzzer-info .pulse-icon { font-size: 2em; }
+.question-display-tv .waiting-buzz p, .question-display-tv .answering-now p { font-size: 1.2em; margin: 0.2em 0 0; }
+.question-display-tv .participant-picker { max-height: 46vh; overflow: auto; }

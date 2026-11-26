@@ -344,3 +344,8 @@
 }
 .ph-revealed span { font-size: 13px; color: var(--ds-dim); }
 .ph-revealed strong { font-size: 20px; font-weight: 800; color: var(--ds-good); overflow-wrap: anywhere; }
+/* Won the buzzer on a question with options: small card so the options fit */
+.bz-result.won.compact { padding: 12px 14px; gap: 6px; }
+.bz-result.won.compact .bz-result-icon { display: none; }
+.bz-result.won.compact h3 { font-size: 18px; }
+.bz-result.won.compact .bz-result-chips span { padding: 3px 10px; font-size: 12px; }

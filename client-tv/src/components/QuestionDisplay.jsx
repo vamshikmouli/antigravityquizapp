@@ -109,8 +109,9 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
     return totalElapsed < readingTime ? readingTime : initialGameState.currentQuestion.timeLimit;
   })
   
-  const [buzzerWinner, setBuzzerWinner] = useState(null)
-  const [buzzResult, setBuzzResult] = useState(null) // { fairness, ranking, falseStarts }
+  // A reconnect mid-buzzer brings back who buzzed first (so the host can still mark it).
+  const [buzzerWinner, setBuzzerWinner] = useState(initialGameState?.buzzer?.winner || null)
+  const [buzzResult, setBuzzResult] = useState(initialGameState?.buzzer || null) // { fairness, ranking, falseStarts }
   const [buzzerStartTime, setBuzzerStartTime] = useState(null)
   const [isBuzzerPhase, setIsBuzzerPhase] = useState(false)
   const [leaderboard, setLeaderboard] = useState([])
@@ -525,7 +526,9 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
           )}
           
           {/* Answer Options or Oral Instructions */}
-          {currentQuestion.type === 'ORAL_BUZZER' ? (
+          {/* Spoken-answer panels make way for the revealed answer */}
+          {(currentQuestion.type === 'ORAL_BUZZER' || currentQuestion.type === 'ORAL_OPEN') && showResults ? null
+          : currentQuestion.type === 'ORAL_BUZZER' ? (
             <div className="oral-buzzer-info card-gradient">
               {!buzzerWinner ? (
                 <div className="waiting-buzz">
@@ -691,7 +694,7 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
                 </div>
               )}
 
-              {currentQuestion.type !== 'ORAL_BUZZER' && currentQuestion.type !== 'ORAL_OPEN' && !showResults && (
+              {!showResults && (
                 <button
                   onClick={() => socket.emit('show-results')}
                   className="control-btn results-btn"

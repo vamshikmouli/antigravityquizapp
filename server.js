@@ -658,6 +658,13 @@ function openBuzzerRound(sessionId, sessionCode, roundId) {
   }
 }
 
+/** The decided (still unanswered) buzz for a question, for clients that reconnect. */
+function decidedBuzz(sessionId, questionId) {
+  const bm = getBuzzerManager(sessionId);
+  if (!questionId || bm.questionId !== questionId || !bm.locked || bm.answered || !bm.firstBuzzer) return null;
+  return bm.result();
+}
+
 function startBuzzerAnswerTimer(bm, sessionCode) {
   // Clue round: the host judges the spoken answer, so no auto-reopen timer.
   if (competition.isClueInPlay(bm.sessionId)) return;
@@ -833,7 +840,8 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
                 // We don't send correctAnswer here for security, 
                 // client can wait for SHOW_RESULTS or we can send it if isCorrect is false
                 correctAnswer: answer.isCorrect ? null : 'Answered' 
-              } : null
+              } : null,
+              buzzer: decidedBuzz(session.id, currentQ.id)
             };
           }
           
@@ -872,7 +880,9 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
 
         let currentGameState = null;
         if (session.status === SESSION_STATUS.ACTIVE && activeSessions.has(session.code)) {
-          currentGameState = activeSessions.get(session.code);
+          const cached = activeSessions.get(session.code);
+          // Reconnecting mid-buzzer: bring back who buzzed first so the host can mark it.
+          currentGameState = { ...cached, buzzer: decidedBuzz(session.id, cached.currentQuestion?.id) };
         }
 
         socket.emit(SOCKET_EVENTS.SESSION_JOINED, {

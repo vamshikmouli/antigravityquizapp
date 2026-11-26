@@ -20,10 +20,13 @@ function QuizScreen({ socket, participantData, initialGameState }) {
   const [totalTime, setTotalTime] = useState(0)
   const [timerPhase, setTimerPhase] = useState('READING')
   const [buzzerActive, setBuzzerActive] = useState(false)
-  const [buzzerLocked, setBuzzerLocked] = useState(false)
-  const [buzzerWinner, setBuzzerWinner] = useState(null)
+  // A reconnect mid-buzzer brings back who buzzed first; the winner can still answer.
+  const rejoinBuzz = initialGameState?.buzzer?.winner ? initialGameState.buzzer : null
+  const [buzzerLocked, setBuzzerLocked] = useState(Boolean(rejoinBuzz))
+  const [buzzerWinner, setBuzzerWinner] = useState(rejoinBuzz?.winner || null)
   const [buzzerStartTime, setBuzzerStartTime] = useState(null)
-  const [canAnswer, setCanAnswer] = useState(initialGameState?.question && !initialGameState?.hasAnswered && !['BUZZER', 'ORAL_BUZZER'].includes(initialGameState?.question.type))
+  const [canAnswer, setCanAnswer] = useState(Boolean(initialGameState?.question && !initialGameState?.hasAnswered && (
+    rejoinBuzz ? rejoinBuzz.winner.participantId === participantData?.id : !['BUZZER', 'ORAL_BUZZER'].includes(initialGameState?.question.type))))
   const [answerSubmitted, setAnswerSubmitted] = useState(initialGameState?.hasAnswered || false)
   const [feedback, setFeedback] = useState(initialGameState?.lastAnswerResult || null)
   const [revealed, setRevealed] = useState(false) // host showed the answer: the clock stops
@@ -33,7 +36,7 @@ function QuizScreen({ socket, participantData, initialGameState }) {
   const [isReading, setIsReading] = useState(false)
   // Fair buzzer: 'idle' | 'armed' | 'open' | 'pressed' | 'falseStart'
   const [buzzerPhase, setBuzzerPhase] = useState('idle')
-  const [buzzResult, setBuzzResult] = useState(null) // fairness + ranking from the server
+  const [buzzResult, setBuzzResult] = useState(rejoinBuzz ? { fairness: rejoinBuzz.fairness || null, ranking: rejoinBuzz.ranking || [] } : null) // fairness + ranking from the server
   // Competition (team) mode
   const [turn, setTurn] = useState(initialGameState?.question?.turn || null)
   const [clueLocked, setClueLocked] = useState(false)
@@ -362,6 +365,14 @@ function QuizScreen({ socket, participantData, initialGameState }) {
     setAnswerSubmitted(true)
   }
   
+  // Won the buzzer on a question with options: bring the options into view to tap.
+  const iWonBuzz = buzzerWinner?.participantId === participantData.id
+  useEffect(() => {
+    if (iWonBuzz && canAnswer && currentQuestion?.options?.length) {
+      requestAnimationFrame(() => document.querySelector('.ph-options')?.scrollIntoView({ behavior: 'smooth', block: 'end' }))
+    }
+  }, [iWonBuzz, canAnswer, currentQuestion?.id])
+
   if (eliminated) {
     return <EliminatedView round={eliminated.round} name={participantData?.name} />
   }
@@ -492,7 +503,7 @@ function QuizScreen({ socket, participantData, initialGameState }) {
             const mine = buzzResult?.ranking?.find(r => r.participantId === participantData.id)
             const slowest = Math.max(1, theirs || 0, mine?.reactionMs || 0)
             return won ? (
-              <div className="bz-result won">
+              <div className={`bz-result won ${currentQuestion.options?.length ? 'compact' : ''}`}>
                 <div className="bz-result-icon">🏆</div>
                 <h3>You buzzed first!</h3>
                 {theirs != null && (
