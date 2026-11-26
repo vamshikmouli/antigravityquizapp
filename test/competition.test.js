@@ -111,3 +111,24 @@ test('rankGroups / calculateRankings put eliminated groups last', () => {
   const c = calculateRankings([G('A', 5), G('B', 50, { eliminatedAt: new Date() }), G('C', 9)]);
   assert.deepEqual(c.map((g) => g.id), ['C', 'A', 'B']);
 });
+
+test('playableCount: equal turns for however many groups join', async () => {
+  const { playableCount } = await import('../controllers/competition.js');
+  assert.equal(playableCount(20, 5), 20); // planned for 5 groups
+  assert.equal(playableCount(20, 2), 20); // 10 each
+  assert.equal(playableCount(20, 3), 18); // 6 each, 2 left over
+  assert.equal(playableCount(8, 3), 6);
+  assert.equal(playableCount(8, 5), 5);   // 1 each
+  assert.equal(playableCount(3, 5), 3);   // fewer questions than groups: play them all
+  assert.equal(playableCount(8, 0), 8);   // nobody joined yet
+});
+
+test('eliminationAllowance: never leaves fewer than 2 groups in', async () => {
+  const { eliminationAllowance } = await import('../controllers/competition.js');
+  assert.equal(eliminationAllowance(5, 1), 1);
+  assert.equal(eliminationAllowance(3, 1), 1);
+  assert.equal(eliminationAllowance(2, 1), 0); // 2 groups: no elimination
+  assert.equal(eliminationAllowance(4, 3), 2);
+  assert.equal(eliminationAllowance(1, 1), 0);
+  assert.equal(eliminationAllowance(5, 0), 0);
+});

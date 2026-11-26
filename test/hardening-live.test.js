@@ -156,6 +156,11 @@ test('joining: blank names, seat take-over, fake-id late join, ended quiz', asyn
   const won = next(host, 'buzzer-winner');
   A2.s.emit('buzzer-press', { questionId: q2.id, roundId: opened.roundId, reactionMs: 250 });
   assert.equal((await won).winner.participantId, A.data.participant.id);
+  // A host or TV that reconnects now still sees who buzzed first (so it can mark them).
+  const { data: rejoinedHost } = await join({ code: made.code, role: 'host', token: made.token });
+  assert.equal(rejoinedHost.currentGameState.buzzer?.winner?.participantId, A.data.participant.id);
+  const { data: tv } = await join({ code: made.code, role: 'display' });
+  assert.equal(tv.currentGameState.buzzer?.winner?.participantId, A.data.participant.id);
   const loser = next(B.s, 'error');
   B.s.emit('submit-answer', { questionId: q2.id, answer: 'Jupiter' });
   assert.match((await loser).message, /buzzed first/i);

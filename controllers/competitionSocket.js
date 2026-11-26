@@ -2,7 +2,7 @@ import { SOCKET_EVENTS } from '../shared/constants.js';
 import { calculateRankings } from '../shared/utils.js';
 import {
   FORMATS, roundConfig, answersMatch, directedPoints, cluePointsFor,
-  CompetitionState, roundSummary, eliminationCandidates
+  CompetitionState, roundSummary, eliminationCandidates, playableCount, eliminationAllowance
 } from './competition.js';
 
 /**
@@ -30,7 +30,9 @@ export function createCompetition({ io, prisma, getBuzzerManager, startBuzzerRou
       roundTypes,
       state: new CompetitionState(),
       timer: null,
-      lastRoundEnded: null
+      lastRoundEnded: null,
+      roundGroups: new Map(), // round -> groups playing it (fixed when the round starts)
+      skipped: new Set()      // question ids passed over so groups get equal turns
     };
     sessions.set(sessionId, c);
     return c;
@@ -70,8 +72,31 @@ export function createCompetition({ io, prisma, getBuzzerManager, startBuzzerRou
     }
   }
 
+  const activeCount = (sessionId) => prisma.participant.count({ where: { sessionId, eliminatedAt: null } });
+
+  /** Groups playing a DIRECTED round, fixed at its first question. */
+  async function groupsForRound(c, sessionId, round) {
+    if (!c.roundGroups.has(round)) c.roundGroups.set(round, await activeCount(sessionId));
+    return c.roundGroups.get(round);
+  }
+
+  function roundPlan(c, round, groups) {
+    const total = (c.roundTypes.get(round) || []).length;
+    const playing = playableCount(total, groups);
+    return { groups, total, playing, perGroup: groups ? Math.floor(playing / groups) : playing };
+  }
+
+  async function namesByResult(sessionId, questionId) {
+    const answers = await prisma.answer.findMany({ where: { questionId, participant: { sessionId } }, include: { participant: { select: { name: true } } } });
+    return {
+      correctNames: answers.filter((a) => a.isCorrect).map((a) => a.participant.name),
+      incorrectNames: answers.filter((a) => !a.isCorrect).map((a) => a.participant.name)
+    };
+  }
+
   async function revealResults(sessionId, sessionCode, question) {
     const c = sessions.get(sessionId);
+    if (c) c.currentRevealed = true;
     clearTimer(c);
     c?.state.finish();
     const answers = await prisma.answer.findMany({ where: { questionId: question.id, participant: { sessionId } }, include: { participant: { select: { name: true } } } });
@@ -134,8 +159,20 @@ export function createCompetition({ io, prisma, getBuzzerManager, startBuzzerRou
     startTurnTimer(c, sessionId, sessionCode, question, seconds);
   }
 
+  /** Questions already shown in this session, in order, with the current one flagged. */
+  async function playedQuestions(sessionId) {
+    const s = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { currentQuestionIndex: true, questions: { orderBy: { order: 'asc' }, select: { question: { select: { id: true, text: true, round: true, type: true, points: true, negativePoints: true, correctAnswer: true } } } } }
+    });
+    const n = Math.min(s?.currentQuestionIndex || 0, s?.questions.length || 0);
+    const skipped = sessions.get(sessionId)?.skipped || new Set();
+    const shown = (s?.questions || []).slice(0, n).map((x, i) => ({ ...x.question, number: i + 1 })).filter((q) => !skipped.has(q.id));
+    return shown.map((q, i) => ({ ...q, isCurrent: i === shown.length - 1 }));
+  }
+
   // ---- hooks called from server.js ---------------------------------------
-  return {
+  const this_ = {
     async mode(sessionId) { return (await load(sessionId)).mode; },
 
     /** Next question chosen: add competition info to the payload, start turn/clue state. */
@@ -143,6 +180,7 @@ export function createCompetition({ io, prisma, getBuzzerManager, startBuzzerRou
       const c = await load(sessionId);
       clearTimer(c);
       c.state.clear();
+      c.currentRevealed = false;
       questionData.mode = c.mode;
       if (c.mode !== 'TEAMS') return { buzzer: null };
       const cfg = cfgFor(c, question.round);
@@ -152,6 +190,7 @@ export function createCompetition({ io, prisma, getBuzzerManager, startBuzzerRou
 
       if (cfg.format === FORMATS.DIRECTED) {
         const groups = (await prisma.participant.findMany({ where: { sessionId, eliminatedAt: null }, orderBy: { joinedAt: 'asc' }, select: { id: true, name: true } }));
+        questionData.roundPlan = roundPlan(c, question.round, await groupsForRound(c, sessionId, question.round));
         const turn = c.state.startDirected(question, groups, cfg);
         if (turn) {
           turn.points = question.points;
@@ -171,6 +210,27 @@ export function createCompetition({ io, prisma, getBuzzerManager, startBuzzerRou
       return { buzzer: null }; // BUZZER / ALL: default behaviour
     },
 
+    /**
+     * Index of the next question to play. In a DIRECTED round only a multiple of
+     * the group count is played so every group gets the same number of turns;
+     * the leftover questions of that round are skipped.
+     */
+    async nextPlayableIndex(sessionId, questions, index) {
+      const c = await load(sessionId);
+      if (c.mode !== 'TEAMS') return index;
+      let i = index;
+      while (i < questions.length) {
+        const round = questions[i].question.round;
+        if (cfgFor(c, round).format !== FORMATS.DIRECTED) return i;
+        const inRound = questions.map((x, j) => (x.question.round === round ? j : -1)).filter((j) => j >= 0);
+        const plan = roundPlan(c, round, await groupsForRound(c, sessionId, round));
+        if (inRound.indexOf(i) < plan.playing) return i;
+        for (const j of inRound.slice(plan.playing)) c.skipped.add(questions[j].question.id);
+        i = inRound[inRound.length - 1] + 1;
+      }
+      return i;
+    },
+
     /** Returns true when the answer was handled here (directed turn). */
     async onSubmitAnswer(socket, data) {
       const { sessionId, sessionCode, participantId } = socket.data;
@@ -188,6 +248,7 @@ export function createCompetition({ io, prisma, getBuzzerManager, startBuzzerRou
     /** Host pressed "Show answer": stop any running turn. */
     async onShowResults(sessionId) {
       const c = await load(sessionId);
+      c.currentRevealed = true;
       clearTimer(c);
       c.state.finish();
     },
@@ -220,13 +281,18 @@ export function createCompetition({ io, prisma, getBuzzerManager, startBuzzerRou
       const groups = await groupsWithAnswers(sessionId);
       const summary = roundSummary(groups, round);
       const already = groups.filter((g) => g.eliminatedRound === round).map((g) => g.id);
-      const remaining = Math.max(0, cfg.eliminate - already.length);
+      const active = groups.filter((g) => !g.eliminatedAt).length;
+      const wanted = Math.max(0, cfg.eliminate - already.length);
+      // Formats are planned for a number of groups; with fewer, at least 2 stay in.
+      const remaining = eliminationAllowance(active, wanted);
       const elim = remaining > 0 ? eliminationCandidates(groups, remaining) : { candidates: [], tied: [] };
+      const count = already.length + remaining;
       return {
         mode: 'TEAMS',
         roundName: cfg.name,
         summary,
-        elimination: cfg.eliminate > 0 ? { count: cfg.eliminate, done: already, remaining, ...elim } : null
+        elimination: count > 0 ? { count, done: already, remaining, ...elim } : null,
+        eliminationSkipped: cfg.eliminate > 0 && remaining < wanted ? { requested: cfg.eliminate, groupsLeft: active } : null
       };
     },
 
@@ -297,6 +363,63 @@ export function createCompetition({ io, prisma, getBuzzerManager, startBuzzerRou
         updateCache(sessionCode, { question: { clues: payload.clues, pointsNow: payload.pointsNow } });
       }));
 
+      // Host opens "Fix marks": played questions and each group's mark for one of them.
+      socket.on(SOCKET_EVENTS.GET_MARKS, async (data = {}, callback) => {
+        const reply = typeof callback === 'function' ? callback : () => {};
+        if (socket.data.role !== 'host') return reply({ error: 'Only the host can do that' });
+        try {
+          const { sessionId } = socket.data;
+          const played = await playedQuestions(sessionId);
+          if (!played.length) return reply({ questions: [], rows: [] });
+          const q = played.find((x) => x.id === data.questionId) || played[played.length - 1];
+          const groups = await prisma.participant.findMany({ where: { sessionId }, orderBy: { joinedAt: 'asc' }, include: { answers: { where: { questionId: q.id } } } });
+          reply({
+            questions: played.map(({ id, number, round, text }) => ({ id, number, round, text })),
+            question: q,
+            rows: groups.map((g) => ({
+              participantId: g.id, name: g.name, eliminated: Boolean(g.eliminatedAt),
+              answered: g.answers.length > 0, isCorrect: g.answers[0]?.isCorrect ?? null,
+              points: g.answers[0]?.points ?? 0, answer: g.answers[0]?.answer ?? null
+            }))
+          });
+        } catch (e) { console.error('[Competition] get-marks:', e); reply({ error: 'Could not load marks' }); }
+      });
+
+      // Host fixes a mark: set one group's result and points for a played question.
+      socket.on(SOCKET_EVENTS.CORRECT_MARK, hostOnly(async ({ questionId, participantId, isCorrect, points }) => {
+        const { sessionId, sessionCode } = socket.data;
+        const q = (await playedQuestions(sessionId)).find((x) => x.id === questionId);
+        if (!q) throw new Error('That question has not been played yet');
+        const group = await prisma.participant.findFirst({ where: { id: participantId, sessionId } });
+        if (!group) throw new Error('Group not found');
+        const pts = Number.parseInt(points, 10);
+        if (!Number.isFinite(pts) || Math.abs(pts) > 1000) throw new Error('Points must be a number between -1000 and 1000');
+
+        const existing = await prisma.answer.findUnique({ where: { participantId_questionId: { participantId, questionId } } });
+        const c = await load(sessionId);
+        // Adding a mark for a group that has none would block its real answer,
+        // so on the question in play that waits until the answer is shown.
+        if (!existing && q.isCurrent && !c.currentRevealed) throw new Error('Show the answer first, then fix marks for this question');
+
+        const delta = pts - (existing?.points ?? 0);
+        await prisma.$transaction([
+          existing
+            ? prisma.answer.update({ where: { id: existing.id }, data: { isCorrect: Boolean(isCorrect), points: pts } })
+            : prisma.answer.create({ data: { participantId, questionId, answer: 'Marked by host', isCorrect: Boolean(isCorrect), points: pts } }),
+          prisma.participant.update({ where: { id: participantId }, data: { score: { increment: delta } } })
+        ]);
+
+        io.to(sessionCode).emit(SOCKET_EVENTS.MARKS_CORRECTED, {
+          questionId, participantId, name: group.name, isCorrect: Boolean(isCorrect), points: pts, delta,
+          ...(await namesByResult(sessionId, questionId))
+        });
+        await emitLeaderboard(sessionId, sessionCode);
+        // Between rounds: refresh the round summary (and elimination candidates).
+        if (c.mode === 'TEAMS' && c.lastRoundEnded === q.round) {
+          io.to(sessionCode).emit(SOCKET_EVENTS.ROUND_SUMMARY_UPDATED, { round: q.round, ...(await this_.onRoundEnded(sessionId, q.round)) });
+        }
+      }));
+
       // Host confirms elimination at the end of a round.
       socket.on(SOCKET_EVENTS.ELIMINATE_GROUP, hostOnly(async ({ participantIds }) => {
         const { sessionId, sessionCode } = socket.data;
@@ -317,4 +440,5 @@ export function createCompetition({ io, prisma, getBuzzerManager, startBuzzerRou
     forget(sessionId) { const c = sessions.get(sessionId); clearTimer(c); sessions.delete(sessionId); },
     invalidate(sessionId) { this.forget(sessionId); }
   };
+  return this_;
 }

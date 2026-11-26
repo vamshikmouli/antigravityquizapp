@@ -4,6 +4,7 @@ import FinalResultsDisplay from './FinalResultsDisplay'
 import { SOCKET_EVENTS, TIME_LIMITS } from '../../../shared/constants'
 import MusicControls from './MusicControls'
 import Icon from './common/Icon'
+import MarksEditor from './MarksEditor'
 import { TurnCard, ClueBoardTV, TurnToast, TeamRoundRecap, formatLabel } from './TeamBits'
 import './QuestionDisplay.css'
 
@@ -108,8 +109,9 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
     return totalElapsed < readingTime ? readingTime : initialGameState.currentQuestion.timeLimit;
   })
   
-  const [buzzerWinner, setBuzzerWinner] = useState(null)
-  const [buzzResult, setBuzzResult] = useState(null) // { fairness, ranking, falseStarts }
+  // A reconnect mid-buzzer brings back who buzzed first (so the host can still mark it).
+  const [buzzerWinner, setBuzzerWinner] = useState(initialGameState?.buzzer?.winner || null)
+  const [buzzResult, setBuzzResult] = useState(initialGameState?.buzzer || null) // { fairness, ranking, falseStarts }
   const [buzzerStartTime, setBuzzerStartTime] = useState(null)
   const [isBuzzerPhase, setIsBuzzerPhase] = useState(false)
   const [leaderboard, setLeaderboard] = useState([])
@@ -123,6 +125,9 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
   const [clueLocked, setClueLocked] = useState([])
   const [eliminatedNow, setEliminatedNow] = useState([])
   const toastTimer = useRef(null)
+  const [showMarks, setShowMarks] = useState(false) // host: "Fix marks" panel
+  const currentQIdRef = useRef(null)
+  currentQIdRef.current = currentQuestion?.id || null
   
   const [participants, setParticipants] = useState([]);
   const [selectedParticipant, setSelectedParticipant] = useState(null);
@@ -244,6 +249,21 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
       setEliminatedNow((prev) => [...prev, ...(data.groups || [])])
     })
 
+    // Host fixed a mark: refresh the names shown for this question's results
+    socket.on('marks-corrected', (data) => {
+      if (data.questionId !== currentQIdRef.current) return
+      setQuestionResults((prev) => prev ? {
+        ...prev,
+        correctNames: data.correctNames, incorrectNames: data.incorrectNames,
+        correctCount: data.correctNames.length, incorrectCount: data.incorrectNames.length
+      } : prev)
+    })
+
+    // Between rounds the summary (and who is at risk) follows the fixed marks
+    socket.on('round-summary-updated', (data) => {
+      setRoundResults((prev) => (prev && prev.round === data.round ? { ...prev, ...data } : prev))
+    })
+
     socket.on('round-ended', (data) => {
       setRoundResults(data)
       setLeaderboard(data.leaderboard)
@@ -278,6 +298,8 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
       socket.off('clue-revealed')
       socket.off('clue-reopened')
       socket.off('group-eliminated')
+      socket.off('marks-corrected')
+      socket.off('round-summary-updated')
     }
   }, [socket])
   
@@ -344,10 +366,20 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
     )
   }
   
+  const fixMarks = userRole === 'host' && (
+    <>
+      <button type="button" className="ds-btn ds-btn-sm tv-fix-marks" onClick={() => setShowMarks(true)} title="Change a group's result or points">
+        <Icon name="pencil" /> Fix marks
+      </button>
+      {showMarks && <MarksEditor socket={socket} questionId={currentQuestion?.id} onClose={() => setShowMarks(false)} />}
+    </>
+  )
+
   // If Round Ended, show large Leaderboard
   if (roundResults?.mode === 'TEAMS') {
     return (
       <div className="question-display-tv fade-in round-recap">
+        {fixMarks && <div className="tv-recap-tools">{fixMarks}</div>}
         <TeamRoundRecap
           data={roundResults}
           isHost={userRole === 'host'}
@@ -362,6 +394,7 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
   if (roundResults) {
     return (
       <div className="question-display-tv fade-in round-recap">
+        {fixMarks && <div className="tv-recap-tools">{fixMarks}</div>}
         <div className="round-recap-content">
           <h1 className="recap-title">End of Round {roundResults.round}</h1>
           <h2 className="recap-subtitle">Next: Round {roundResults.nextRound}</h2>
@@ -405,6 +438,13 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
               </span>
               <span className="round-badge-tv">{currentQuestion.roundName || `Round ${currentQuestion.round}`}</span>
               {currentQuestion.format && !sameTag(formatLabel(currentQuestion.format), currentQuestion.roundName) && <span className="tm-chip">{formatLabel(currentQuestion.format)}</span>}
+              {currentQuestion.roundPlan?.groups > 0 && (
+                <span className="tm-chip soft" title={currentQuestion.roundPlan.playing < currentQuestion.roundPlan.total
+                  ? `${currentQuestion.roundPlan.groups} groups: ${currentQuestion.roundPlan.playing} of ${currentQuestion.roundPlan.total} questions are played so every group gets the same number`
+                  : `${currentQuestion.roundPlan.groups} groups`}>
+                  {currentQuestion.roundPlan.perGroup} each
+                </span>
+              )}
               {currentQuestion.category && <span className="tm-chip soft">{currentQuestion.category}</span>}
             </div>
             <div className="header-actions">
@@ -486,7 +526,9 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
           )}
           
           {/* Answer Options or Oral Instructions */}
-          {currentQuestion.type === 'ORAL_BUZZER' ? (
+          {/* Spoken-answer panels make way for the revealed answer */}
+          {(currentQuestion.type === 'ORAL_BUZZER' || currentQuestion.type === 'ORAL_OPEN') && showResults ? null
+          : currentQuestion.type === 'ORAL_BUZZER' ? (
             <div className="oral-buzzer-info card-gradient">
               {!buzzerWinner ? (
                 <div className="waiting-buzz">
@@ -652,7 +694,7 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
                 </div>
               )}
 
-              {currentQuestion.type !== 'ORAL_BUZZER' && currentQuestion.type !== 'ORAL_OPEN' && !showResults && (
+              {!showResults && (
                 <button
                   onClick={() => socket.emit('show-results')}
                   className="control-btn results-btn"
@@ -669,6 +711,8 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
                   Next question <Icon name="arrow-right" />
                 </button>
               )}
+
+              {fixMarks}
 
               {/* Inline Results Stats */}
               {showResults && questionResults && (
