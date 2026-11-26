@@ -5,7 +5,8 @@ import { SOCKET_EVENTS, TIME_LIMITS } from '../../../shared/constants'
 import MusicControls from './MusicControls'
 import Icon from './common/Icon'
 import MarksEditor from './MarksEditor'
-import { TurnCard, ClueBoardTV, TurnToast, TeamRoundRecap, formatLabel } from './TeamBits'
+import { TurnCard, ClueBoardTV, TeamRoundRecap, formatLabel, VerdictBanner, RoundBanner } from './TeamBits'
+import { playSfx } from '../utils/sfx'
 import './QuestionDisplay.css'
 
 // Host-only explanations for the fairness flags the server attaches.
@@ -26,19 +27,19 @@ const sameTag = (a, b) => {
 }
 
 /** Countdown ring for the header: drains clockwise, turns red for the last 5 seconds. */
-function TimerRing({ remaining, total, phase, stopped = false }) {
+function TimerRing({ remaining, total, phase, stopped = false, held = false, paused = false }) {
   const r = 44, c = 2 * Math.PI * r
   const frac = total > 0 ? Math.max(0, Math.min(1, remaining / total)) : 0
-  const low = !stopped && phase !== 'READING' && remaining <= 5
+  const low = !stopped && !held && !paused && phase !== 'READING' && remaining <= 5
   return (
-    <div className={`tv-timer ${phase.toLowerCase()} ${low ? 'low' : ''} ${stopped ? 'stopped' : ''}`} role="timer" aria-label={stopped ? 'Time stopped' : `${remaining} seconds left`}>
+    <div className={`tv-timer ${phase.toLowerCase()} ${low ? 'low' : ''} ${stopped || held || paused ? 'stopped' : ''} ${paused ? 'paused' : ''}`} role="timer" aria-label={stopped ? 'Time stopped' : paused ? 'Timer paused' : held ? 'Timer waiting' : `${remaining} seconds left`}>
       <svg viewBox="0 0 100 100" aria-hidden="true">
         <circle cx="50" cy="50" r={r} className="tv-timer-track" />
         <circle cx="50" cy="50" r={r} className="tv-timer-bar" strokeDasharray={c} strokeDashoffset={c * (1 - frac)} />
       </svg>
       <div className="tv-timer-text">
         <b>{remaining}</b>
-        <small>{stopped ? 'Done' : phase === 'READING' ? 'Read' : phase === 'BUZZER' ? 'Buzz' : 'Sec'}</small>
+        <small>{stopped ? 'Done' : paused ? 'Paused' : held ? 'Ready' : phase === 'READING' ? 'Read' : phase === 'BUZZER' ? 'Buzz' : 'Sec'}</small>
       </div>
     </div>
   )
@@ -90,12 +91,14 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
   const [questionStartTime, setQuestionStartTime] = useState(initialGameState?.startTime || null)
   const [timerPhase, setTimerPhase] = useState(() => {
     if (!initialGameState) return 'READING';
+    if (!initialGameState.startTime) return 'QUESTION'; // held: teacher is reading
     const totalElapsed = Math.floor((Date.now() - initialGameState.startTime) / 1000);
     const readingTime = initialGameState.currentQuestion.readingTime || 0;
     return totalElapsed < readingTime ? 'READING' : 'QUESTION';
   })
   const [timeRemaining, setTimeRemaining] = useState(() => {
     if (!initialGameState) return 0;
+    if (!initialGameState.startTime) return initialGameState.currentQuestion.timeLimit;
     const totalElapsed = Math.floor((Date.now() - initialGameState.startTime) / 1000);
     const readingTime = initialGameState.currentQuestion.readingTime || 0;
     if (totalElapsed < readingTime) return readingTime - totalElapsed;
@@ -104,6 +107,7 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
   })
   const [totalTime, setTotalTime] = useState(() => {
     if (!initialGameState) return 0;
+    if (!initialGameState.startTime) return initialGameState.currentQuestion.timeLimit;
     const totalElapsed = Math.floor((Date.now() - initialGameState.startTime) / 1000);
     const readingTime = initialGameState.currentQuestion.readingTime || 0;
     return totalElapsed < readingTime ? readingTime : initialGameState.currentQuestion.timeLimit;
@@ -122,6 +126,18 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
   const [turn, setTurn] = useState(initialGameState?.currentQuestion?.turn || null)
   const [tried, setTried] = useState([])
   const [turnResult, setTurnResult] = useState(null)
+  // Audience view: big verdict after each answer, who picked which option, round rules banner
+  const [verdict, setVerdict] = useState(null)
+  // Read-aloud + timer controls
+  const [paused, setPaused] = useState(Boolean(initialGameState?.pausedAt))
+  const [readAloud, setReadAloud] = useState(Boolean(sessionData?.readAloud))
+  const [pickedBy, setPickedBy] = useState([]) // [{ name, answer, isCorrect }] for the current question
+  const [roundBanner, setRoundBanner] = useState(false)
+  const verdictTimer = useRef(null)
+  const bannerTimer = useRef(null)
+  const sfx = (kind) => playSfx(kind, { muted: audioManager?.isMuted, volume: audioManager?.volume ?? 0.5 })
+  const sfxRef = useRef(sfx)
+  sfxRef.current = sfx
   const [clueLocked, setClueLocked] = useState([])
   const [eliminatedNow, setEliminatedNow] = useState([])
   const toastTimer = useRef(null)
@@ -182,6 +198,18 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
       setTurnResult(null)
       setClueLocked([])
       setEliminatedNow([])
+      setVerdict(null)
+      setPickedBy([])
+      setPaused(false)
+      clearTimeout(bannerTimer.current)
+      if (data.question.roundInfo?.first) {
+        // New round: explain its rules to the audience for a few seconds
+        setRoundBanner(true)
+        sfxRef.current('round')
+        bannerTimer.current = setTimeout(() => setRoundBanner(false), 9000)
+      } else {
+        setRoundBanner(false)
+      }
 
       // Play music
       audioManager?.play('QUESTION')
@@ -221,6 +249,7 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
     // Round Ended
     socket.on('turn-passed', (data) => {
       setTurn((prev) => { if (prev) setTried((t) => [...t, prev.name]); return data.turn })
+      setVerdict((v) => (v ? { ...v, passTo: { name: data.turn?.name, points: data.turn?.points } } : v))
       setCurrentQuestion((q) => (q && q.id === data.questionId ? { ...q, timeLimit: data.timeLimit, readingTime: 0 } : q))
       setQuestionStartTime(data.startTime)
       setTimerPhase('QUESTION')
@@ -230,8 +259,11 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
 
     socket.on('turn-result', (data) => {
       setTurnResult(data)
-      clearTimeout(toastTimer.current)
-      toastTimer.current = setTimeout(() => setTurnResult(null), 3500)
+      setVerdict(data)
+      if (data.answer) setPickedBy((p) => [...p, { name: data.name, answer: data.answer, isCorrect: data.isCorrect }])
+      sfxRef.current(data.isCorrect ? 'correct' : 'wrong')
+      clearTimeout(verdictTimer.current)
+      verdictTimer.current = setTimeout(() => setVerdict(null), 3800)
     })
 
     socket.on('clue-revealed', (data) => {
@@ -248,6 +280,22 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
     socket.on('group-eliminated', (data) => {
       setEliminatedNow((prev) => [...prev, ...(data.groups || [])])
     })
+
+    // Read-aloud: the host showed the options — they appear and the clock starts
+    socket.on('question-released', (data) => {
+      setCurrentQuestion((q) => (q && q.id === data.questionId ? { ...q, options: data.options, optionImages: data.optionImages, held: false } : q))
+      setQuestionStartTime(data.startTime)
+      setTimerPhase('QUESTION')
+      setPaused(false)
+      audioManager?.play('OPTIONS')
+    })
+    socket.on('timer-paused', (data) => { if (data.questionId === currentQIdRef.current) setPaused(true) })
+    socket.on('timer-resumed', (data) => {
+      if (data.questionId !== currentQIdRef.current) return
+      setQuestionStartTime(data.startTime)
+      setPaused(false)
+    })
+    socket.on('read-aloud-changed', (data) => setReadAloud(Boolean(data.on)))
 
     // Host fixed a mark: refresh the names shown for this question's results
     socket.on('marks-corrected', (data) => {
@@ -300,12 +348,16 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
       socket.off('group-eliminated')
       socket.off('marks-corrected')
       socket.off('round-summary-updated')
+      socket.off('question-released')
+      socket.off('timer-paused')
+      socket.off('timer-resumed')
+      socket.off('read-aloud-changed')
     }
   }, [socket])
   
-  // Timer countdown (stops once the answer is shown)
+  // Timer countdown (stops once the answer is shown, and while paused)
   useEffect(() => {
-    if (!currentQuestion || showResults) return
+    if (!currentQuestion || showResults || paused) return
     
     timerRef.current = setInterval(() => {
       if (isBuzzerPhase && buzzerStartTime) {
@@ -353,7 +405,7 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
         clearInterval(timerRef.current)
       }
     }
-  }, [currentQuestion, questionStartTime, isBuzzerPhase, buzzerStartTime, timerPhase, showResults])
+  }, [currentQuestion, questionStartTime, isBuzzerPhase, buzzerStartTime, timerPhase, showResults, paused])
 
   if (!currentQuestion) {
     return (
@@ -438,7 +490,7 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
               </span>
               <span className="round-badge-tv">{currentQuestion.roundName || `Round ${currentQuestion.round}`}</span>
               {currentQuestion.format && !sameTag(formatLabel(currentQuestion.format), currentQuestion.roundName) && <span className="tm-chip">{formatLabel(currentQuestion.format)}</span>}
-              {currentQuestion.roundPlan?.groups > 0 && (
+              {currentQuestion.roundPlan?.groups > 0 && currentQuestion.roundPlan.perGroup > 0 && (
                 <span className="tm-chip soft" title={currentQuestion.roundPlan.bySubject
                   ? `${currentQuestion.roundPlan.groups} groups: each group gets one question from each of the ${currentQuestion.roundPlan.subjects} subjects${currentQuestion.roundPlan.playing < currentQuestion.roundPlan.total ? ` (${currentQuestion.roundPlan.playing} of ${currentQuestion.roundPlan.total} questions played)` : ''}`
                   : currentQuestion.roundPlan.playing < currentQuestion.roundPlan.total
@@ -457,7 +509,7 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
                 )}
               </div>
               
-              <TimerRing remaining={timeRemaining} total={totalTime} phase={timerPhase} stopped={showResults} />
+              <TimerRing remaining={timeRemaining} total={totalTime} phase={timerPhase} stopped={showResults} held={Boolean(currentQuestion.held)} paused={paused} />
               {userRole === 'host' && (
                 <button
                   onClick={() => { if (window.confirm('End the quiz now? Final results will be shown.')) socket.emit('end-quiz') }}
@@ -471,6 +523,8 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
           </div>
           
           
+          {roundBanner && currentQuestion.roundInfo && <RoundBanner question={currentQuestion} />}
+
           {/* Question */}
           <div className="question-card card-gradient">
             {currentQuestion.imageUrl && (
@@ -482,6 +536,20 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
           </div>
 
           {currentQuestion.format === 'DIRECTED' && !showResults && <TurnCard turn={turn} tried={tried} />}
+          {currentQuestion.held && (
+            <div className="tv-held" role="status">
+              <span className="tv-held-icon"><Icon name="mic" /></span>
+              <div>
+                <strong>Listen — the question is being read</strong>
+                <small>{currentQuestion.type === 'BUZZER' || currentQuestion.type === 'ORAL_BUZZER'
+                  ? 'The buzzer opens after the question is read.'
+                  : currentQuestion.optionCount ? `${currentQuestion.optionCount} options appear next — then the timer starts.` : 'The timer starts when the reading is done.'}</small>
+              </div>
+            </div>
+          )}
+          {paused && !showResults && (
+            <div className="tv-paused" role="status"><Icon name="pause" /> Timer paused</div>
+          )}
           {currentQuestion.type === 'CLUE' && (
             <>
               <ClueBoardTV question={currentQuestion} reveal={showResults ? questionResults?.clues : null} />
@@ -493,7 +561,7 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
               )}
             </>
           )}
-          <TurnToast result={turnResult} />
+          <VerdictBanner verdict={verdict} />
 
           {/* Row for Correct Answer and Buzzer Winner */}
           {(showResults || buzzerWinner) && (
@@ -631,6 +699,17 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
                     )}
                     <div className="option-text-tv">{option}</div>
                   </div>
+                  {(() => {
+                    // Which groups chose this option: from the reveal, or each answered turn so far
+                    const names = showResults && questionResults?.picks
+                      ? (questionResults.picks[option] || []).map((n) => ({ name: n, isCorrect: option === currentQuestion.correctAnswer }))
+                      : pickedBy.filter((p) => p.answer === option)
+                    return names.length > 0 && (
+                      <div className="tv-picks">
+                        {names.map((p) => <span key={p.name} className={p.isCorrect ? 'good' : 'bad'}>{p.name}</span>)}
+                      </div>
+                    )
+                  })()}
                   {showResults && option === currentQuestion.correctAnswer && (
                     <div className="correct-indicator"><Icon name="circle-check" /></div>
                   )}
@@ -655,7 +734,7 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
 
           {userRole === 'host' && (
             <div className="host-controls">
-              {currentQuestion.format === 'DIRECTED' && turn && !showResults && (
+              {currentQuestion.format === 'DIRECTED' && turn && !showResults && !currentQuestion.held && (
                 <div className="oral-marking-controls">
                   <button onClick={() => socket.emit('mark-turn', { questionId: currentQuestion.id, isCorrect: true })} className="control-btn correct-btn-large"><Icon name="check" /> {turn.name} correct</button>
                   <button onClick={() => socket.emit('mark-turn', { questionId: currentQuestion.id, isCorrect: false })} className="control-btn incorrect-btn-large"><Icon name="x" /> Wrong{turn.isPass ? '' : ' · pass'}</button>
@@ -696,6 +775,18 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
                 </div>
               )}
 
+              {currentQuestion.held && (
+                <button onClick={() => socket.emit('release-question', { questionId: currentQuestion.id })} className="control-btn release-btn">
+                  {currentQuestion.type === 'BUZZER' || currentQuestion.type === 'ORAL_BUZZER'
+                    ? <><Icon name="bell" /> Open buzzer</>
+                    : currentQuestion.optionCount ? <><Icon name="eye" /> Show options</> : <><Icon name="play" /> Start timer</>}
+                </button>
+              )}
+              {!currentQuestion.held && !showResults && (
+                <button onClick={() => socket.emit(paused ? 'resume-timer' : 'pause-timer', { questionId: currentQuestion.id })} className="control-btn pause-btn">
+                  <Icon name={paused ? 'play' : 'pause'} /> {paused ? 'Resume timer' : 'Pause timer'}
+                </button>
+              )}
               {!showResults && (
                 <button
                   onClick={() => socket.emit('show-results')}
@@ -704,6 +795,10 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
                   <Icon name="eye" /> Show answer
                 </button>
               )}
+              <button type="button" className="control-btn readaloud-btn" title="Teacher reads each question before the options appear (from the next question)"
+                onClick={() => socket.emit('set-read-aloud', { on: !readAloud })}>
+                <Icon name="mic" /> Teacher reads: {readAloud ? 'On' : 'Off'}
+              </button>
 
               {showResults && (
                 <button

@@ -44,6 +44,62 @@ export function ClueBoardTV({ question, reveal }) {
   )
 }
 
+/**
+ * Big verdict for the audience after a group answers (or the host marks it):
+ * who, right/wrong, what they answered, points, and where the question goes next.
+ */
+export function VerdictBanner({ verdict }) {
+  if (!verdict) return null
+  const good = verdict.isCorrect
+  const label = good ? 'Correct!' : verdict.timedOut ? "Time's up" : 'Wrong'
+  const pts = Number(verdict.points) || 0
+  return (
+    <div className={`tv-verdict ${good ? 'good' : 'bad'}`} key={`${verdict.participantId}-${verdict.attempt}-${verdict.clue}-${pts}`} role="status" aria-live="assertive">
+      <div className="tv-verdict-card">
+        <span className="tv-verdict-icon"><Icon name={good ? 'circle-check' : verdict.timedOut ? 'clock' : 'circle-x'} /></span>
+        <div className="tv-verdict-main">
+          <small>{verdict.name}</small>
+          <strong>{label}</strong>
+          {verdict.answer && <em>answered “{verdict.answer}”</em>}
+        </div>
+        {(good || pts !== 0) && <span className="tv-verdict-pts">{pts > 0 ? '+' : ''}{pts}<small>pts</small></span>}
+      </div>
+      {verdict.passTo && (
+        <div className="tv-verdict-pass"><Icon name="corner-right" /> Passes to <b>{verdict.passTo.name}</b> for {verdict.passTo.points} pts</div>
+      )}
+    </div>
+  )
+}
+
+/** Plain-words rules for the round, shown to the audience as each round begins. */
+export function RoundBanner({ question }) {
+  const info = question.roundInfo || {}
+  const lines = []
+  if (question.format === 'DIRECTED') {
+    lines.push('Each group answers its own question when it is their turn.')
+    if (info.passOnWrong) lines.push(`Wrong answer? It passes to the next group for ${info.passPercent ?? 50}% of the points.`)
+  } else if (question.format === 'ALL') {
+    lines.push('Every group answers every question on its phone.')
+  } else if (question.format === 'BUZZER') {
+    lines.push('Buzz first to answer!')
+    if (question.negativePoints > 0) lines.push(`Correct +${question.points} · wrong −${question.negativePoints}.`)
+  } else if (question.format === 'CLUE') {
+    const pts = question.cluePoints?.length ? question.cluePoints.join(' → ') : null
+    lines.push(`Clues appear one by one — buzz early for more points${pts ? ` (${pts})` : ''}.`)
+    if (question.negativePoints > 0) lines.push(`A wrong answer costs ${question.negativePoints} points and locks that group out of the question.`)
+  }
+  if (info.eliminate > 0) lines.push(`After this round the lowest ${info.eliminate > 1 ? `${info.eliminate} groups are` : 'group is'} eliminated.`)
+  return (
+    <div className="tv-round-banner" key={question.round}>
+      <div className="tv-round-banner-head">
+        <span>Round {question.round}</span>
+        <strong>{question.roundName || `Round ${question.round}`}</strong>
+      </div>
+      <ul>{lines.map((l) => <li key={l}>{l}</li>)}</ul>
+    </div>
+  )
+}
+
 export function TurnToast({ result }) {
   if (!result) return null
   return (

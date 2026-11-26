@@ -132,6 +132,8 @@ app.use(express.json());
 
 // Store active sessions and their socket rooms
 const activeSessions = new Map();
+// Read-aloud: options (and whether to open the buzzer) held back until the host shows them.
+const heldParts = new Map(); // sessionCode -> { questionId, options, optionImages, buzzer, tenantId }
 
 // Questions may only be added to the caller's own quizzes.
 async function ownsQuiz(user, quizId) {
@@ -658,6 +660,12 @@ function openBuzzerRound(sessionId, sessionCode, roundId) {
   }
 }
 
+/** Tell the room how a group did on a host-marked answer (TV verdict banner). */
+async function emitVerdict(sessionCode, { questionId, participantId, isCorrect, points }) {
+  const p = await prisma.participant.findUnique({ where: { id: participantId }, select: { name: true } }).catch(() => null);
+  io.to(sessionCode).emit(SOCKET_EVENTS.TURN_RESULT, { questionId, participantId, name: p?.name || "Player", isCorrect, points: points ?? 0 });
+}
+
 /** The decided (still unanswered) buzz for a question, for clients that reconnect. */
 function decidedBuzz(sessionId, questionId) {
   const bm = getBuzzerManager(sessionId);
@@ -841,7 +849,8 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
                 // client can wait for SHOW_RESULTS or we can send it if isCorrect is false
                 correctAnswer: answer.isCorrect ? null : 'Answered' 
               } : null,
-              buzzer: decidedBuzz(session.id, currentQ.id)
+              buzzer: decidedBuzz(session.id, currentQ.id),
+              paused: Boolean(sessionData.pausedAt)
             };
           }
           
@@ -893,6 +902,7 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
             currentQuestionIndex: session.currentQuestionIndex,
             musicEnabled: session.musicEnabled,
             musicVolume: session.musicVolume,
+            readAloud: Boolean(session.readAloud),
             host: session.host,
             analytics // Include analytics here
           },
@@ -1073,14 +1083,32 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
       // Any previous round's timers die here, so a stale buzzer can never
       // open on this question.
       getBuzzerManager(sessionId).deactivate();
-      const comp = await competition.onQuestionStart({ sessionId, sessionCode, question, questionData });
-      
-      const startTime = Date.now();
+      // Read-aloud: the question opens on its own (no options, no clock) while the
+      // teacher reads it; the host's "Show options" sends the options and starts it.
+      // Clue questions aren't held: the clue itself is what gets read out.
+      const held = Boolean(session.readAloud) && question.type !== QUESTION_TYPES.CLUE;
+      const comp = await competition.onQuestionStart({ sessionId, sessionCode, question, questionData, held });
+      const isBuzzerType = question.type === QUESTION_TYPES.BUZZER || question.type === QUESTION_TYPES.ORAL_BUZZER;
+      const wantsBuzzer = comp.buzzer ?? isBuzzerType;
+
+      let startTime = Date.now();
+      if (held) {
+        heldParts.set(sessionCode, { questionId: question.id, options: questionData.options, optionImages: questionData.optionImages, buzzer: wantsBuzzer, tenantId: session.tenantId });
+        questionData.held = true;
+        questionData.optionCount = (questionData.options || []).length;
+        questionData.options = [];
+        questionData.optionImages = [];
+        questionData.readingTime = 0;
+        startTime = null;
+      } else {
+        heldParts.delete(sessionCode);
+      }
       
       // Update local cache for rejoining players
       activeSessions.set(sessionCode, {
         currentQuestion: questionData,
-        startTime
+        startTime,
+        held
       });
 
       // Send question to all clients
@@ -1090,8 +1118,7 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
       });
       
       // Buzzer question (or clue round): reading time -> get ready (random hold) -> open.
-      const isBuzzerType = question.type === QUESTION_TYPES.BUZZER || question.type === QUESTION_TYPES.ORAL_BUZZER;
-      if (comp.buzzer ?? isBuzzerType) {
+      if (!held && wantsBuzzer) {
         startBuzzerRound({
           sessionId,
           sessionCode,
@@ -1104,6 +1131,63 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
     } catch (error) {
       console.error('Error moving to next question:', error);
       socket.emit(SOCKET_EVENTS.ERROR, { message: 'Failed to load question' });
+    }
+  });
+
+  // ---- Read-aloud and timer controls (host) ---------------------------------
+  // "Show options": the teacher has read the question; send the options and start the clock.
+  socket.on('release-question', async ({ questionId } = {}) => {
+    try {
+      const { sessionId, sessionCode, role } = socket.data;
+      if (role !== 'host') return socket.emit(SOCKET_EVENTS.ERROR, { message: 'Only the host can do that' });
+      const cached = activeSessions.get(sessionCode);
+      if (!cached?.held || cached.currentQuestion?.id !== questionId) return;
+      const parts = heldParts.get(sessionCode) || {};
+      heldParts.delete(sessionCode);
+      const startTime = Date.now();
+      const currentQuestion = { ...cached.currentQuestion, options: parts.options || [], optionImages: parts.optionImages || [], held: false };
+      activeSessions.set(sessionCode, { ...cached, currentQuestion, startTime, held: false, pausedAt: null });
+      io.to(sessionCode).emit('question-released', { questionId, options: currentQuestion.options, optionImages: currentQuestion.optionImages, startTime });
+      await competition.onRelease({ sessionId, sessionCode, questionId });
+      if (parts.buzzer) startBuzzerRound({ sessionId, sessionCode, questionId, readingTimeSec: 0, tenantId: parts.tenantId });
+    } catch (error) {
+      console.error('release-question failed:', error);
+      socket.emit(SOCKET_EVENTS.ERROR, { message: 'Could not show the options' });
+    }
+  });
+
+  // Pause / resume the question clock (answers wait while paused).
+  socket.on('pause-timer', ({ questionId } = {}) => {
+    const { sessionId, sessionCode, role } = socket.data;
+    if (role !== 'host') return socket.emit(SOCKET_EVENTS.ERROR, { message: 'Only the host can do that' });
+    const cached = activeSessions.get(sessionCode);
+    if (!cached || cached.held || cached.pausedAt || cached.currentQuestion?.id !== questionId) return;
+    const pausedAt = Date.now();
+    activeSessions.set(sessionCode, { ...cached, pausedAt });
+    competition.onPause(sessionId);
+    io.to(sessionCode).emit('timer-paused', { questionId, pausedAt });
+  });
+
+  socket.on('resume-timer', ({ questionId } = {}) => {
+    const { sessionId, sessionCode, role } = socket.data;
+    if (role !== 'host') return socket.emit(SOCKET_EVENTS.ERROR, { message: 'Only the host can do that' });
+    const cached = activeSessions.get(sessionCode);
+    if (!cached?.pausedAt || cached.currentQuestion?.id !== questionId) return;
+    const startTime = (cached.startTime || Date.now()) + (Date.now() - cached.pausedAt);
+    activeSessions.set(sessionCode, { ...cached, startTime, pausedAt: null });
+    competition.onResume(sessionId);
+    io.to(sessionCode).emit('timer-resumed', { questionId, startTime });
+  });
+
+  // Turn read-aloud on/off for the rest of the quiz (applies from the next question).
+  socket.on('set-read-aloud', async ({ on } = {}) => {
+    try {
+      const { sessionId, sessionCode, role } = socket.data;
+      if (role !== 'host') return socket.emit(SOCKET_EVENTS.ERROR, { message: 'Only the host can do that' });
+      await prisma.session.update({ where: { id: sessionId }, data: { readAloud: Boolean(on) } });
+      io.to(sessionCode).emit('read-aloud-changed', { on: Boolean(on) });
+    } catch (error) {
+      console.error('set-read-aloud failed:', error);
     }
   });
 
@@ -1131,6 +1215,7 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
       let incorrectCount = 0;
       const correctNames = [];
       const incorrectNames = [];
+      const picks = {}; // option -> names of the groups that chose it (shown on the TV)
       
       participants.forEach(p => {
         // Find answer for this question
@@ -1138,6 +1223,7 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
         // For now, we fetch participants with answers
         const answer = p.answers.find(a => a.questionId === currentQ.id);
         if (answer) {
+          (picks[answer.answer] ||= []).push(p.name);
           if (answer.isCorrect) {
             correctCount++;
             correctNames.push(p.name);
@@ -1158,7 +1244,8 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
         correctPercentage: (correctCount + incorrectCount) > 0 
           ? Math.round((correctCount / (correctCount + incorrectCount)) * 100) 
           : 0,
-        clues: currentQ.type === QUESTION_TYPES.CLUE ? currentQ.clues : undefined
+        clues: currentQ.type === QUESTION_TYPES.CLUE ? currentQ.clues : undefined,
+        picks
       });
       
     } catch (error) {
@@ -1344,6 +1431,12 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
         socket.emit(SOCKET_EVENTS.ERROR, { message: 'Your group has been eliminated' });
         return;
       }
+      // Read-aloud: no answers until the options are shown, and none while paused.
+      const live = activeSessions.get(sessionCode);
+      if (live?.currentQuestion?.id === questionId) {
+        if (live.held) { socket.emit(SOCKET_EVENTS.ERROR, { message: 'Wait for the options' }); return; }
+        if (live.pausedAt) { socket.emit(SOCKET_EVENTS.ERROR, { message: 'The timer is paused' }); return; }
+      }
       // Competition mode: directed turns are judged here (turn order, passes).
       if (await competition.onSubmitAnswer(socket, data)) return;
 
@@ -1430,6 +1523,8 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
       }
 
       // Notify everyone results are ready (to update TV/Host view)
+      // The audience sees the verdict on the TV (who, right/wrong, points)
+      await emitVerdict(sessionCode, { questionId, participantId, isCorrect: true, points: result.points });
       await competition.onShowResults(sessionId); // answer is out: marks can be fixed
       io.to(sessionCode).emit(SOCKET_EVENTS.SHOW_RESULTS, {
         correctAnswer: result.correctAnswer,
@@ -1494,6 +1589,8 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
       }
 
       // Notify everyone results are ready
+      // The audience sees the verdict on the TV (who, right/wrong, points)
+      await emitVerdict(sessionCode, { questionId, participantId, isCorrect: false, points: result.points });
       await competition.onShowResults(sessionId); // answer is out: marks can be fixed
       io.to(sessionCode).emit(SOCKET_EVENTS.SHOW_RESULTS, {
         correctAnswer: result.correctAnswer,
@@ -1566,6 +1663,8 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
       }
 
       // Notify everyone results for this specific pick
+      // The audience sees the verdict on the TV (who, right/wrong, points)
+      await emitVerdict(sessionCode, { questionId, participantId, isCorrect: Boolean(isCorrect), points: result.points });
       await competition.onShowResults(sessionId); // answer is out: marks can be fixed
       io.to(sessionCode).emit(SOCKET_EVENTS.SHOW_RESULTS, {
         correctAnswer: result.correctAnswer,

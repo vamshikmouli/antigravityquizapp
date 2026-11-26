@@ -42,6 +42,9 @@ function QuizScreen({ socket, participantData, initialGameState }) {
   const [clueLocked, setClueLocked] = useState(false)
   const [turnResult, setTurnResult] = useState(null)
   const [roundEnd, setRoundEnd] = useState(null)
+  // Read-aloud: the question opens without options until the host shows them; the host can pause the clock
+  const [paused, setPaused] = useState(Boolean(initialGameState?.paused))
+  const turnRef = useRef(null)
   const [markFixed, setMarkFixed] = useState(null) // host corrected this group's mark
   const currentQIdRef = useRef(null)
   currentQIdRef.current = currentQuestion?.id || null
@@ -116,7 +119,27 @@ function QuizScreen({ socket, participantData, initialGameState }) {
       if (data.question.format === 'DIRECTED') {
         setCanAnswer(data.question.turn?.participantId === participantData.id)
       }
+      setPaused(false)
+      if (data.question.held) setCanAnswer(false) // the teacher reads it first
     })
+
+    // Host showed the options: they appear and the clock starts
+    socket.on('question-released', (data) => {
+      setCurrentQuestion((q) => (q && q.id === data.questionId ? { ...q, options: data.options, optionImages: data.optionImages, held: false } : q))
+      setQuestionStartTime(data.startTime)
+      setTimerPhase('QUESTION')
+      setPaused(false)
+      setCurrentQuestion((q) => {
+        if (!q) return q
+        const t = turnRef.current
+        if (['BUZZER', 'ORAL_BUZZER', 'CLUE'].includes(q.type)) setCanAnswer(false)
+        else if (q.format === 'DIRECTED') setCanAnswer(t?.participantId === participantData.id)
+        else setCanAnswer(true)
+        return q
+      })
+    })
+    socket.on('timer-paused', () => setPaused(true))
+    socket.on('timer-resumed', (data) => { setQuestionStartTime(data.startTime); setPaused(false) })
 
     // Directed question passed to the next group (new, shorter timer).
     socket.on('turn-passed', (data) => {
@@ -273,14 +296,19 @@ function QuizScreen({ socket, participantData, initialGameState }) {
       socket.off('clue-reopened')
       socket.off('round-ended')
       socket.off('round-summary-updated')
+      socket.off('question-released')
+      socket.off('timer-paused')
+      socket.off('timer-resumed')
       socket.off('marks-corrected')
       socket.off('group-eliminated')
     }
   }, [socket, participantData])
   
-  // Timer effect
+  turnRef.current = turn
+
+  // Timer effect (frozen while the host has paused it)
   useEffect(() => {
-    if (!currentQuestion || revealed) return
+    if (!currentQuestion || revealed || paused) return
 
     timerRef.current = setInterval(() => {
       if (buzzerWinner && buzzerStartTime) {
@@ -322,7 +350,7 @@ function QuizScreen({ socket, participantData, initialGameState }) {
     }, 100)
 
     return () => clearInterval(timerRef.current)
-  }, [currentQuestion, questionStartTime, buzzerWinner, buzzerStartTime, timerPhase, revealed])
+  }, [currentQuestion, questionStartTime, buzzerWinner, buzzerStartTime, timerPhase, revealed, paused])
   
   const handleBuzzerPress = (e) => {
     if (!socket || !currentQuestion) return
@@ -485,6 +513,16 @@ function QuizScreen({ socket, participantData, initialGameState }) {
       
       {/* Buzzer or Answer Options */}
       {isDirected && <TurnBanner turn={turn} me={participantData.id} oral={oralTurn} />}
+      {currentQuestion.held && (
+        <div className="ph-held" role="status">
+          <span className="ph-held-icon">🎤</span>
+          <strong>Listen to your teacher</strong>
+          <span>{currentQuestion.type === 'BUZZER' || currentQuestion.type === 'ORAL_BUZZER'
+            ? 'The buzzer opens after the question is read.'
+            : 'The options appear here in a moment.'}</span>
+        </div>
+      )}
+      {paused && !revealed && <div className="ph-paused" role="status">⏸ Timer paused — wait for the host</div>}
       {isClue && <ClueBoard question={currentQuestion} locked={clueLocked} />}
       <TurnToast result={turnResult} />
 
@@ -574,7 +612,7 @@ function QuizScreen({ socket, participantData, initialGameState }) {
           options={currentQuestion.options}
           optionImages={currentQuestion.optionImages}
           onSelect={handleAnswerSelect}
-          disabled={!canAnswer}
+          disabled={!canAnswer || paused}
         />
       )}
       

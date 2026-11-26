@@ -349,3 +349,13 @@
 .bz-result.won.compact .bz-result-icon { display: none; }
 .bz-result.won.compact h3 { font-size: 18px; }
 .bz-result.won.compact .bz-result-chips span { padding: 3px 10px; font-size: 12px; }
+
+/* read-aloud: teacher reads the question, options come after */
+.ph-held {
+  display: grid; justify-items: center; gap: 6px; text-align: center; padding: 22px 16px; border-radius: 18px;
+  background: var(--ds-panel); border: 2px dashed var(--ds-border-2);
+}
+.ph-held-icon { font-size: 36px; animation: gm-float 2s ease-in-out infinite; }
+.ph-held strong { font-size: 18px; color: var(--ds-text); }
+.ph-held span { font-size: 14px; color: var(--ds-dim); }
+.ph-paused { margin: 8px 0; padding: 8px 14px; border-radius: 999px; text-align: center; font-weight: 800; color: #fff; background: #f59e0b; }

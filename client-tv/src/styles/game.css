@@ -661,3 +661,92 @@ body:has(.question-display-tv .global-music-controls.inline) .global-music-contr
 .question-display-tv .recap-leaderboard { width: min(820px, 92vw); max-width: none; max-height: none; overflow: visible; margin: 0 auto 1.4em; }
 .question-display-tv .recap-leaderboard .gm-board.large { width: 100%; max-height: 60vh; display: flex; flex-direction: column; }
 .question-display-tv .recap-leaderboard .gm-board-list { min-height: 0; overflow-y: auto; }
+
+/* ==========================================================================
+   Audience view: verdict, round rules, who picked what, score pop-ups
+   ========================================================================== */
+.tv-verdict {
+  position: fixed; left: 50%; top: 42%; z-index: 300; transform: translate(-50%, -50%);
+  display: grid; justify-items: center; gap: 0.6em; pointer-events: none;
+  font-size: clamp(16px, 1.4vw, 30px);
+  animation: tv-verdict-in 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.25) both;
+}
+@keyframes tv-verdict-in { from { opacity: 0; transform: translate(-50%, -50%) scale(0.7); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+.tv-verdict-card {
+  display: flex; align-items: center; gap: 0.9em; padding: 0.9em 1.5em 0.9em 1em; border-radius: 1.2em; color: #fff;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45), 0 0 0 6px rgba(255, 255, 255, 0.18);
+}
+.tv-verdict.good .tv-verdict-card { background: linear-gradient(135deg, #10b981, #059669); }
+.tv-verdict.bad .tv-verdict-card { background: linear-gradient(135deg, #fb7185, #e11d48); }
+.tv-verdict-icon { display: grid; font-size: 3em; }
+.tv-verdict-main { display: grid; line-height: 1.1; }
+.tv-verdict-main small { font-size: 1em; font-weight: 700; opacity: 0.92; }
+.tv-verdict-main strong { font-size: 2.4em; font-weight: 900; letter-spacing: -0.02em; }
+.tv-verdict-main em { font-style: normal; font-size: 0.95em; opacity: 0.92; margin-top: 0.15em; }
+.tv-verdict-pts { margin-left: 0.6em; font-size: 2.6em; font-weight: 900; font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: 0.15em; }
+.tv-verdict-pts small { font-size: 0.35em; font-weight: 700; opacity: 0.85; }
+.tv-verdict-pass {
+  display: inline-flex; align-items: center; gap: 0.5em; padding: 0.55em 1.1em; border-radius: 999px;
+  background: var(--ds-elev); color: var(--ds-text); border: 1px solid var(--ds-border-2); font-size: 1.05em; font-weight: 700;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3); animation: ds-fade-up 0.35s ease-out both;
+}
+
+.tv-round-banner {
+  flex: none; display: grid; gap: 0.4em; padding: 0.9em 1.3em; border-radius: 1em;
+  background: var(--ds-grad); color: #fff; box-shadow: 0 14px 40px rgba(168, 85, 247, 0.35);
+  animation: ds-fade-up 0.4s ease-out both;
+}
+.tv-round-banner-head { display: flex; align-items: baseline; gap: 0.6em; }
+.tv-round-banner-head span { font-size: 0.8em; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.85; }
+.tv-round-banner-head strong { font-size: 1.5em; font-weight: 900; letter-spacing: -0.01em; }
+.tv-round-banner ul { margin: 0; padding-left: 1.2em; display: grid; gap: 0.15em; font-size: 1.05em; font-weight: 600; }
+
+.question-display-tv .answer-card-tv { flex-wrap: wrap; }
+.tv-picks { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 0.35em; margin-top: 0.2em; padding-left: 0.2em; }
+.tv-picks span {
+  padding: 0.2em 0.7em; border-radius: 999px; font-size: 0.75em; font-weight: 800; color: #fff;
+  animation: gm-pop 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.4) both;
+}
+.tv-picks span.good { background: var(--ds-good); }
+.tv-picks span.bad { background: var(--ds-bad); }
+@keyframes gm-pop { from { transform: scale(0.5); opacity: 0; } to { transform: none; opacity: 1; } }
+/* a picked-but-wrong option stays readable (not dimmed) so the audience sees the miss */
+.question-display-tv .answer-card-tv.dimmed:has(.tv-picks) { opacity: 0.75; filter: none; }
+
+.gm-row.bump { animation: gm-row-bump 1.2s ease-out; }
+.gm-row.bump.up { box-shadow: inset 0 0 0 2px var(--ds-good); }
+.gm-row.bump.down { box-shadow: inset 0 0 0 2px var(--ds-bad); }
+@keyframes gm-row-bump { 0% { transform: scale(1); } 20% { transform: scale(1.04); } 100% { transform: scale(1); } }
+.gm-score { position: relative; }
+.gm-delta {
+  position: absolute; right: 100%; top: 50%; margin-right: 0.4em; transform: translateY(-50%);
+  font-style: normal; font-size: 0.85em; font-weight: 900; padding: 0.1em 0.5em; border-radius: 999px; color: #fff; white-space: nowrap;
+  animation: gm-delta 2.6s ease-out both;
+}
+.gm-delta.up { background: var(--ds-good); }
+.gm-delta.down { background: var(--ds-bad); }
+@keyframes gm-delta { 0% { opacity: 0; transform: translateY(0) scale(0.6); } 12% { opacity: 1; transform: translateY(-50%) scale(1.1); } 80% { opacity: 1; transform: translateY(-50%); } 100% { opacity: 0; transform: translateY(-120%); } }
+
+/* ---- read-aloud: question first, options when the host shows them ------ */
+.question-display-tv .answer-grid-tv:empty { display: none; }
+.tv-held {
+  flex: 1 1 auto; min-height: 7em; display: flex; align-items: center; justify-content: center; gap: 1em;
+  padding: 1.4em; border-radius: 1.2em; text-align: left;
+  background: var(--ds-panel); border: 2px dashed color-mix(in srgb, var(--ds-accent) 45%, transparent);
+}
+.tv-held-icon {
+  width: 3.4em; height: 3.4em; border-radius: 50%; display: grid; place-items: center; flex: none;
+  font-size: 1.3em; color: #fff; background: var(--ds-grad); animation: tv-listen 1.6s ease-in-out infinite;
+}
+@keyframes tv-listen { 0%, 100% { box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.45); } 50% { box-shadow: 0 0 0 0.6em rgba(168, 85, 247, 0); } }
+.tv-held strong { display: block; font-size: 1.6em; font-weight: 850; color: var(--ds-text); }
+.tv-held small { display: block; margin-top: 0.2em; font-size: 1.05em; color: var(--ds-dim); }
+.tv-paused {
+  flex: none; align-self: center; display: inline-flex; align-items: center; gap: 0.5em;
+  padding: 0.45em 1.1em; border-radius: 999px; font-weight: 800; color: #fff; background: #f59e0b;
+  box-shadow: 0 8px 24px rgba(245, 158, 11, 0.35);
+}
+.tv-timer.paused .tv-timer-bar { stroke: #f59e0b; }
+.question-display-tv .release-btn { background: var(--ds-grad); color: #fff; font-size: 1.05em !important; padding: 0.8em 1.6em !important; }
+.question-display-tv .pause-btn { background: #f59e0b; color: #fff; }
+.question-display-tv .readaloud-btn { background: var(--ds-panel-2); color: var(--ds-dim); font-weight: 650; }

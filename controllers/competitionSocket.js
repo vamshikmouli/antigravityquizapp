@@ -105,6 +105,8 @@ export function createCompetition({ io, prisma, getBuzzerManager, startBuzzerRou
     const answers = await prisma.answer.findMany({ where: { questionId: question.id, participant: { sessionId } }, include: { participant: { select: { name: true } } } });
     const correct = answers.filter((a) => a.isCorrect).map((a) => a.participant.name);
     const wrong = answers.filter((a) => !a.isCorrect).map((a) => a.participant.name);
+    const picks = {};
+    for (const a of answers) (picks[a.answer] ||= []).push(a.participant.name);
     io.to(sessionCode).emit(SOCKET_EVENTS.SHOW_RESULTS, {
       correctAnswer: question.correctAnswer,
       correctCount: correct.length,
@@ -113,7 +115,8 @@ export function createCompetition({ io, prisma, getBuzzerManager, startBuzzerRou
       incorrectNames: wrong,
       totalAnswers: answers.length,
       correctPercentage: answers.length ? Math.round((correct.length / answers.length) * 100) : 0,
-      clues: question.type === 'CLUE' ? question.clues : undefined
+      clues: question.type === 'CLUE' ? question.clues : undefined,
+      picks
     });
   }
 
@@ -126,6 +129,9 @@ export function createCompetition({ io, prisma, getBuzzerManager, startBuzzerRou
   async function startTurnTimer(c, sessionId, sessionCode, question, seconds) {
     clearTimer(c);
     const qid = question.id;
+    // Remembered so the host can pause / resume the turn clock.
+    c.deadline = Date.now() + seconds * 1000;
+    c.timerCtx = { sessionId, sessionCode, question };
     c.timer = setTimeout(() => {
       c.timer = null;
       if (c.state.current?.questionId === qid && !c.state.current.done) {
@@ -147,7 +153,9 @@ export function createCompetition({ io, prisma, getBuzzerManager, startBuzzerRou
     for (const s of socketsOf(sessionId, turn.participantId)) {
       s.emit(SOCKET_EVENTS.ANSWER_RECEIVED, { isCorrect, points, correctAnswer: isCorrect ? question.correctAnswer : undefined, timedOut });
     }
-    io.to(sessionCode).emit(SOCKET_EVENTS.TURN_RESULT, { questionId: question.id, participantId: turn.participantId, name: turn.name, attempt: turn.attempt, isCorrect, points, timedOut });
+    // "answer" lets the TV show which option the group picked (options questions only).
+    const picked = !timedOut && question.options?.length ? String(answer ?? '') : undefined;
+    io.to(sessionCode).emit(SOCKET_EVENTS.TURN_RESULT, { questionId: question.id, participantId: turn.participantId, name: turn.name, attempt: turn.attempt, isCorrect, points, timedOut, answer: picked });
     await emitLeaderboard(sessionId, sessionCode);
 
     if (isCorrect) return revealResults(sessionId, sessionCode, question);
@@ -179,7 +187,7 @@ export function createCompetition({ io, prisma, getBuzzerManager, startBuzzerRou
     async mode(sessionId) { return (await load(sessionId)).mode; },
 
     /** Next question chosen: add competition info to the payload, start turn/clue state. */
-    async onQuestionStart({ sessionId, sessionCode, question, questionData }) {
+    async onQuestionStart({ sessionId, sessionCode, question, questionData, held = false }) {
       const c = await load(sessionId);
       clearTimer(c);
       c.state.clear();
@@ -193,6 +201,13 @@ export function createCompetition({ io, prisma, getBuzzerManager, startBuzzerRou
         questionData.format = isClue ? FORMATS.CLUE : cfg.format;
         questionData.roundName = cfg.name;
         questionData.category = question.category || null;
+        // First question of a round: the TV explains the round's rules to the audience.
+        questionData.roundInfo = {
+          first: c.lastRoundStarted !== question.round,
+          passOnWrong: cfg.passOnWrong, passPercent: cfg.passPercent, eliminate: cfg.eliminate,
+          groups: await activeCount(sessionId)
+        };
+        c.lastRoundStarted = question.round;
       }
       if (isClue) {
         const clue = c.state.startClue(question, cfg);
@@ -209,10 +224,13 @@ export function createCompetition({ io, prisma, getBuzzerManager, startBuzzerRou
         const { ids, ...plan } = roundPlan(c, question.round, await groupsForRound(c, sessionId, question.round));
         questionData.roundPlan = plan;
         const turn = c.state.startDirected(question, groups, cfg);
+        c.pendingTurnTimer = null;
         if (turn) {
           turn.points = question.points;
           questionData.turn = turn;
-          startTurnTimer(c, sessionId, sessionCode, question, (question.timeLimit || 30) + (question.readingTime || 0));
+          // Read-aloud: the clock starts when the host shows the options.
+          if (held) c.pendingTurnTimer = { question, seconds: question.timeLimit || 30 };
+          else startTurnTimer(c, sessionId, sessionCode, question, (question.timeLimit || 30) + (question.readingTime || 0));
         }
         return { buzzer: false };
       }
@@ -251,6 +269,36 @@ export function createCompetition({ io, prisma, getBuzzerManager, startBuzzerRou
       const isCorrect = (question.options?.length ? data.answer === question.correctAnswer : false) || answersMatch(data.answer, question.correctAnswer);
       await resolveTurn({ sessionId, sessionCode, question, isCorrect, answer: data.answer });
       return true;
+    },
+
+    /** Read-aloud: the host showed the options — start the turn clock now. */
+    async onRelease({ sessionId, sessionCode, questionId }) {
+      const c = await load(sessionId);
+      const p = c.pendingTurnTimer;
+      if (p && p.question.id === questionId && c.state.current?.questionId === questionId && !c.state.current.done) {
+        startTurnTimer(c, sessionId, sessionCode, p.question, p.seconds);
+      }
+      c.pendingTurnTimer = null;
+    },
+
+    /** Host paused the timer: stop the turn clock and remember what was left. */
+    onPause(sessionId) {
+      const c = sessions.get(sessionId);
+      if (!c?.timer || !c.deadline) return;
+      c.pausedRemaining = Math.max(1000, c.deadline - Date.now());
+      clearTimer(c);
+    },
+
+    /** Host resumed: restart the turn clock with the time that was left. */
+    onResume(sessionId) {
+      const c = sessions.get(sessionId);
+      if (!c || c.pausedRemaining == null || !c.timerCtx) return;
+      const { sessionCode, question } = c.timerCtx;
+      const left = c.pausedRemaining;
+      c.pausedRemaining = null;
+      if (c.state.current?.questionId === question.id && !c.state.current.done) {
+        startTurnTimer(c, sessionId, sessionCode, question, left / 1000);
+      }
     },
 
     /** Host pressed "Show answer": stop any running turn. */

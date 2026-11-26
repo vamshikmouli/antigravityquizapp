@@ -11,6 +11,7 @@ function CreateSessionPage() {
   const [loading, setLoading] = useState(true);
   const [musicEnabled, setMusicEnabled] = useState(true);
   const [musicVolume, setMusicVolume] = useState(50);
+  const [readAloud, setReadAloud] = useState(true); // teacher reads each question before options appear
   const [launching, setLaunching] = useState(false);
   
   useEffect(() => {
@@ -48,7 +49,8 @@ function CreateSessionPage() {
           settings: {
             musicEnabled,
             musicVolume: musicVolume / 100, // Convert to 0-1 range
-            showLiveResults: true
+            showLiveResults: true,
+            readAloud
           }
         })
       });
@@ -128,6 +130,17 @@ function CreateSessionPage() {
           <div className="ds-section-title"><h2>Settings</h2></div>
           <div className="ds-card" style={{ maxWidth: 560, display: 'grid', gap: 16 }}>
             <div className="ds-row" style={{ flexWrap: 'nowrap' }}>
+              <span className="ds-tile" style={{ '--c': '#38bdf8', color: '#38bdf8' }}><Icon name="mic" /></span>
+              <div style={{ flex: 1 }}>
+                <h3 style={{ fontSize: 15 }}>Teacher reads each question</h3>
+                <p>Questions open without options or timer. Press <b>Show options</b> when you have read it out — the options appear and the timer starts.</p>
+              </div>
+              <label className="ds-switch" aria-label="Teacher reads each question">
+                <input type="checkbox" checked={readAloud} onChange={(e) => setReadAloud(e.target.checked)} />
+                <span />
+              </label>
+            </div>
+            <div className="ds-row" style={{ flexWrap: 'nowrap' }}>
               <span className="ds-tile" style={{ '--c': '#f472b6', color: '#f472b6' }}><Icon name="music" /></span>
               <div style={{ flex: 1 }}>
                 <h3 style={{ fontSize: 15 }}>Background music</h3>
@@ -158,7 +171,7 @@ function CreateSessionPage() {
           <div style={{ minWidth: 0, flex: 1 }}>
             <strong style={{ display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{selectedQuiz.title}</strong>
             <span className="ds-muted" style={{ fontSize: 13 }}>
-              {selectedCount ? `${selectedCount} questions · music ${musicEnabled ? 'on' : 'off'}` : 'Add questions to this quiz before launching'}
+              {selectedCount ? `${selectedCount} questions · music ${musicEnabled ? 'on' : 'off'}${readAloud ? ' · teacher reads' : ''}` : 'Add questions to this quiz before launching'}
             </span>
           </div>
           <button type="button" onClick={handleStartSession} className="ds-btn ds-btn-success ds-btn-lg"
