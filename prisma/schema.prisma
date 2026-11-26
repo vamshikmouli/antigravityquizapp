@@ -116,6 +116,8 @@ model Session {
   musicVolume          Float    @default(0.5)
   showLiveResults      Boolean  @default(true)
   allowLateJoin        Boolean  @default(false)
+  // Read-aloud: each question opens without options or timer until the host shows them.
+  readAloud            Boolean  @default(false)
   createdAt            DateTime @default(now())
   completedAt          DateTime?
   

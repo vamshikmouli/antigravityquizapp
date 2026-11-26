@@ -102,9 +102,14 @@ test('subject round with 2 groups: one question per subject for each group', asy
       assert.deepEqual([q.roundPlan.bySubject, q.roundPlan.subjects, q.roundPlan.perGroup, q.roundPlan.playing, q.roundPlan.total], [true, 3, 3, 6, 9]);
     }
     played.push(`${q.text} -> ${q.turn.name}`);
+    // Audience view: the round's first question carries its rules; later ones don't.
+    assert.equal(q.roundInfo.first, k === 0);
+    const verdict = next(host, 'turn-result');
     const res = next(host, 'show-results');
     (q.turn.name === 'Alpha' ? A.s : B.s).emit('submit-answer', { questionId: q.id, answer: 'a' });
-    await res;
+    const v = await verdict;
+    assert.deepEqual([v.name, v.isCorrect, v.points, v.answer], [q.turn.name, true, 10, 'a']); // the TV shows the picked option
+    assert.deepEqual((await res).picks, { a: [q.turn.name] });
   }
   assert.deepEqual(played, [
     'Karnataka 1 -> Alpha', 'Karnataka 2 -> Bravo',

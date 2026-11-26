@@ -31,6 +31,7 @@ export async function createSession(hostId, questionIds, settings = {}, tenant =
         musicVolume: settings.musicVolume ?? 0.5,
         showLiveResults: settings.showLiveResults ?? true,
         allowLateJoin: settings.allowLateJoin ?? false,
+        readAloud: settings.readAloud === true,
         questions: {
           create: questionIds.map((questionId, index) => ({
             questionId,
