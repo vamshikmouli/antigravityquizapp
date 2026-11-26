@@ -144,27 +144,41 @@ export default function AIQuizPlanner({ quizId, startRound = 1, provider, authHe
     }));
 
   // ---- 3. generate every round (sequentially: kind to free-tier rate limits)
+  // One AI request returns at most 20 questions, so bigger rounds (up to 30)
+  // are fetched in batches. Each batch is told which question numbers it
+  // covers, so an ordered round (e.g. subject blocks) keeps its order.
+  const BATCH = 15
   const generateRound = async (i, avoid) => {
     const r = plan.rounds[i];
+    const total = Math.max(1, Number(r.count) || 5);
     setRoundState((s) => ({ ...s, [i]: { status: 'working' } }));
     try {
-      const data = await post('/api/questions/generate', {
-        provider,
-        topic: r.topic || plan.topic,
-        count: Number(r.count) || 5,
-        type: r.type,
-        difficulty: r.difficulty,
-        context: `Quiz "${plan.title}"${plan.audience ? ` for ${plan.audience}` : ''}, round "${r.name}"`,
-        avoid,
-        settings: {
-          round: Number(firstRound) + i,
-          timeLimit: Number(r.timeLimit),
-          readingTime: Number(r.readingTime),
-          points: Number(r.points),
-          negativePoints: Number(r.negativePoints)
-        }
-      });
-      const questions = (data.questions || []).map((q) => ({ ...q, _include: true }));
+      const questions = [];
+      const seen = [...avoid];
+      for (let start = 0; start < total; start += BATCH) {
+        const n = Math.min(BATCH, total - start);
+        const part = total > BATCH ? `; write questions ${start + 1}–${start + n} of the ${total} in this round, continuing the order the round asks for` : '';
+        const data = await post('/api/questions/generate', {
+          provider,
+          topic: r.topic || plan.topic,
+          count: n,
+          type: r.type,
+          difficulty: r.difficulty,
+          context: `Quiz "${plan.title}"${plan.audience ? ` for ${plan.audience}` : ''}, round "${r.name}"${part}`,
+          avoid: seen.slice(-40),
+          settings: {
+            round: Number(firstRound) + i,
+            timeLimit: Number(r.timeLimit),
+            readingTime: Number(r.readingTime),
+            points: Number(r.points),
+            negativePoints: Number(r.negativePoints)
+          }
+        });
+        const batch = (data.questions || []).map((q) => ({ ...q, _include: true }));
+        questions.push(...batch);
+        seen.push(...batch.map((q) => q.text));
+        if (total > BATCH) setRoundState((s) => ({ ...s, [i]: { status: 'working', questions: [...questions] } }));
+      }
       setRoundState((s) => ({ ...s, [i]: { status: 'done', questions } }));
       return questions;
     } catch (err) {
@@ -321,7 +335,7 @@ export default function AIQuizPlanner({ quizId, startRound = 1, provider, authHe
                       {DIFFICULTIES.map((d) => <option key={d} value={d}>{d[0].toUpperCase() + d.slice(1)}</option>)}
                     </select>
                   </label>
-                  <NumField label="Qs" min={1} max={20} value={r.count} onChange={(v) => updateRound(i, { count: v })} />
+                  <NumField label="Qs" min={1} max={30} value={r.count} onChange={(v) => updateRound(i, { count: v })} />
                   <NumField label="Time" unit="s" min={5} max={600} value={r.timeLimit} onChange={(v) => updateRound(i, { timeLimit: v })} />
                   <NumField label="Reading" unit="s" min={0} max={60} value={r.readingTime} onChange={(v) => updateRound(i, { readingTime: v })} />
                   <NumField label="Points" variant="plus" value={r.points} onChange={(v) => updateRound(i, { points: v })} />

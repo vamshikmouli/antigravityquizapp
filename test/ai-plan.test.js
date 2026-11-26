@@ -91,3 +91,12 @@ test('buildGenerationPrompt adds round context and an avoid list', () => {
   assert.match(user, /What is H2O\?/);
   assert.match(user, /buzzer questions/);
 });
+
+test('parsePlan allows up to 30 questions in a round (generated in batches)', () => {
+  const plan = parsePlan(JSON.stringify({ rounds: [{ type: 'MCQ', count: 25 }, { type: 'MCQ', count: 40 }] }));
+  assert.equal(LIMITS.MAX_PER_ROUND, 30);
+  assert.equal(plan.rounds[0].count, 25);           // kept, no warning
+  assert.equal(plan.rounds[1].count, 30);           // capped
+  assert.ok(plan.warnings.some((w) => /Round 2: limited to 30/.test(w)));
+  assert.ok(!plan.warnings.some((w) => /Round 1:/.test(w)));
+});

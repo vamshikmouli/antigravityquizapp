@@ -18,7 +18,7 @@ import { extractJson } from './aiQuestions.js';
 
 export const LIMITS = {
   MAX_ROUNDS: 10,
-  MAX_PER_ROUND: 20,
+  MAX_PER_ROUND: 30,      // the planner fetches big rounds in batches (see AIQuizPlanner)
   MAX_TOTAL: 60,
   TIME_MIN: 5,
   TIME_MAX: 600,
