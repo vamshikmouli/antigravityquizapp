@@ -531,3 +531,20 @@ body:not([data-theme='light']) .ai-hero-kicker { color: #c4b5fd; }
   .ai-stat-box small { white-space: nowrap; }
   .ai-prompt-bar .ai-chip { display: none; }
 }
+
+/* ---- group competition settings on the plan page ----------------------- */
+.ai-group-toggle {
+  display: flex; align-items: flex-start; gap: 12px; margin: 4px 0 14px; padding: 12px 14px;
+  border-radius: 14px; background: var(--ai-panel); border: 1px solid var(--ai-border, rgba(127, 127, 127, 0.2)); cursor: pointer;
+}
+.ai-group-toggle input { width: 18px; height: 18px; margin-top: 2px; accent-color: #8b5cf6; flex: none; }
+.ai-group-toggle span { display: grid; gap: 2px; }
+.ai-group-toggle small { opacity: 0.75; font-size: 12.5px; }
+.ai-round-group {
+  grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px;
+  padding: 10px 0 2px 52px; border-top: 1px dashed rgba(127, 127, 127, 0.25); margin-top: 2px;
+}
+.ai-round-group .ai-field { min-width: 200px; }
+.ai-check { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; padding-bottom: 8px; cursor: pointer; }
+.ai-check input { width: 16px; height: 16px; accent-color: #8b5cf6; }
+@media (max-width: 720px) { .ai-round-group { padding-left: 0; } }

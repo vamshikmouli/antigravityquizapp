@@ -1,5 +1,5 @@
 import { QUESTION_TYPES } from '../shared/constants.js';
-import { extractJson } from './aiQuestions.js';
+import { extractJson, cluePointsFrom } from './aiQuestions.js';
 
 /**
  * Pure (no network) "understand the teacher's prompt" step.
@@ -33,7 +33,8 @@ export const TYPE_DEFAULTS = {
   SHORT_ANSWER: { timeLimit: 45, readingTime: 0, points: 100, negativePoints: 0 },
   BUZZER: { timeLimit: 15, readingTime: 5, points: 100, negativePoints: 50 },
   ORAL_BUZZER: { timeLimit: 20, readingTime: 5, points: 100, negativePoints: 50 },
-  ORAL_OPEN: { timeLimit: 60, readingTime: 0, points: 100, negativePoints: 0 }
+  ORAL_OPEN: { timeLimit: 60, readingTime: 0, points: 100, negativePoints: 0 },
+  CLUE: { timeLimit: 60, readingTime: 0, points: 30, negativePoints: 5 }
 };
 
 const SUPPORTED_TYPES = new Set(Object.values(QUESTION_TYPES));
@@ -42,6 +43,7 @@ const DIFFICULTIES = new Set(['easy', 'medium', 'hard']);
 // Words teachers actually use -> our types. Checked in order (first match wins),
 // so more specific phrases come first.
 const TYPE_SYNONYMS = [
+  [/clue|who am i|what am i/i, 'CLUE'],
   [/oral.*buzz|buzz.*oral|spoken.*buzz/i, 'ORAL_BUZZER'],
   [/oral|viva|spoken|verbal|open.?ended.*oral/i, 'ORAL_OPEN'],
   [/buzz|rapid.?fire|fastest.?finger|quick.?fire/i, 'BUZZER'],
@@ -71,6 +73,15 @@ function int(v) {
 
 const clamp = (n, lo, hi) => Math.min(Math.max(n, lo), hi);
 
+/** Group-competition round formats (see competition.js). */
+const ROUND_FORMATS = new Set(['DIRECTED', 'ALL', 'BUZZER', 'CLUE']);
+/** Best format for a round of this question type. */
+export function defaultFormat(type) {
+  if (type === 'CLUE') return 'CLUE';
+  if (type === 'BUZZER' || type === 'ORAL_BUZZER') return 'BUZZER';
+  return 'DIRECTED';
+}
+
 /** Build the { system, user } messages for the planning call. */
 export function buildPlanPrompt({ prompt }) {
   const typeList = Object.keys(TYPE_DEFAULTS).join(', ');
@@ -83,9 +94,10 @@ export function buildPlanPrompt({ prompt }) {
     'You read a teacher\'s request and turn it into a structured quiz PLAN. ' +
     'You respond with STRICT JSON only — no markdown, no commentary.\n' +
     'JSON shape:\n' +
-    '{"title":string,"topic":string,"audience":string,"rounds":[{"round":number,"name":string,' +
+    '{"title":string,"topic":string,"audience":string,"groupMode":boolean,"rounds":[{"round":number,"name":string,' +
     '"topic":string,"type":string,"count":number,"difficulty":"easy"|"medium"|"hard",' +
-    '"timeLimit":number,"readingTime":number,"points":number,"negativePoints":number}],' +
+    '"timeLimit":number,"readingTime":number,"points":number,"negativePoints":number,' +
+    '"format":"DIRECTED"|"ALL"|"BUZZER"|"CLUE","passOnWrong":boolean,"eliminate":number}],' +
     '"assumptions":string[]}';
 
   const user =
@@ -95,7 +107,8 @@ export function buildPlanPrompt({ prompt }) {
     'question type per round, topics, difficulty, time limit, reading time, points and negative points.\n' +
     `2. "type" must be one of: ${typeList}. Map the teacher's words: MCQ/options -> MULTIPLE_CHOICE; ` +
     'true/false -> TRUE_FALSE; one-word/fill in the blank/written -> SHORT_ANSWER; buzzer/rapid fire/fastest finger -> BUZZER ' +
-    '(buzzer with options); oral buzzer/spoken answer after buzzing -> ORAL_BUZZER; oral/viva/discussion -> ORAL_OPEN.\n' +
+    '(buzzer with options); oral buzzer/spoken answer after buzzing -> ORAL_BUZZER; oral/viva/discussion/visual (identify the picture) -> ORAL_OPEN; ' +
+    'clue round/"who am I"/"what am I" -> CLUE ("points" is the value at the first clue).\n' +
     '3. "timeLimit" and "readingTime" are in SECONDS (convert minutes). "readingTime" is how long the question is shown ' +
     'before answering/buzzing opens. "negativePoints" is a POSITIVE number deducted for a wrong answer ' +
     '("-10 for wrong" means negativePoints 10; "no negative marking" means 0).\n' +
@@ -107,6 +120,11 @@ export function buildPlanPrompt({ prompt }) {
     '6. Give each round a short engaging "name" and a specific "topic" (the subject its questions are about, ' +
     'including the audience/grade level if mentioned).\n' +
     '7. Default difficulty is "medium" unless the request or audience suggests otherwise.\n' +
+    '9. Group competition: set "groupMode" true when the request is a competition between groups/teams. Then for each ' +
+    'round set "format": DIRECTED (each question goes to one group in turn; use for normal/subject/visual/rapid-fire rounds), ' +
+    'ALL (every group answers every question), BUZZER (groups buzz in; buzzer rounds) or CLUE (clue rounds); ' +
+    '"passOnWrong" (a wrong answer passes to the next group; false for rapid fire unless asked); and "eliminate" = how many ' +
+    'groups are knocked out at the END of that round (0 if not mentioned).\n' +
     '8. In "assumptions", list at most 6 short sentences about the important choices YOU made that the teacher did not ' +
     'state (e.g. a round count or question count you picked). Skip trivial defaults.\n' +
     'Return ONLY the JSON object.';
@@ -118,7 +136,7 @@ export function buildPlanPrompt({ prompt }) {
  * Validate + normalize a raw model reply into a playable plan.
  * Returns { title, topic, audience, rounds, assumptions, warnings } or null.
  */
-export function parsePlan(raw, { fallbackTopic = '' } = {}) {
+export function parsePlan(raw, { fallbackTopic = '', prompt = '' } = {}) {
   const parsed = typeof raw === 'string' ? extractJson(raw) : raw;
   if (!parsed || typeof parsed !== 'object') return null;
   const list = Array.isArray(parsed.rounds) ? parsed.rounds : Array.isArray(parsed) ? parsed : null;
@@ -155,9 +173,15 @@ export function parsePlan(raw, { fallbackTopic = '' } = {}) {
       ? String(item.difficulty).toLowerCase()
       : 'medium';
 
+    const name = typeof item.name === 'string' && item.name.trim() ? item.name.trim().slice(0, 80) : `Round ${idx}`;
+    const fmt = String(item.format ?? '').trim().toUpperCase();
+    const format = ROUND_FORMATS.has(fmt) ? fmt : defaultFormat(type);
     rounds.push({
       round: idx,
-      name: typeof item.name === 'string' && item.name.trim() ? item.name.trim().slice(0, 80) : `Round ${idx}`,
+      name,
+      format,
+      passOnWrong: format === 'DIRECTED' && (typeof item.passOnWrong === 'boolean' ? item.passOnWrong : !/rapid|quick.?fire/i.test(name)),
+      eliminate: clamp(int(item.eliminate) ?? 0, 0, 10),
       topic: (typeof item.topic === 'string' && item.topic.trim() ? item.topic.trim() : topic).slice(0, 300),
       type,
       count,
@@ -178,6 +202,8 @@ export function parsePlan(raw, { fallbackTopic = '' } = {}) {
     title: typeof parsed.title === 'string' && parsed.title.trim() ? parsed.title.trim().slice(0, 120) : 'AI Quiz',
     topic,
     audience: typeof parsed.audience === 'string' ? parsed.audience.trim().slice(0, 120) : '',
+    // Group competition if the model says so or the request talks about groups/teams.
+    groupMode: parsed.groupMode === true || /\b(groups?|teams?)\b/i.test(String(prompt)),
     rounds,
     totalQuestions: rounds.reduce((s, r) => s + r.count, 0),
     assumptions: strList(parsed.assumptions),
@@ -204,6 +230,8 @@ export function applyRoundSettings(questions, settings = {}) {
   return questions.map((q) => {
     const out = { ...q };
     for (const [k, v] of Object.entries(s)) if (v !== undefined) out[k] = v;
+    // Clue questions: the round's points are the value at the first clue.
+    if (out.type === 'CLUE' && s.points !== undefined) out.cluePoints = cluePointsFrom(s.points, (out.clues || []).length || 3);
     if (typeof settings.category === 'string' && settings.category.trim()) out.category = settings.category.trim().slice(0, 80);
     return out;
   });

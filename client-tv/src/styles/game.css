@@ -650,3 +650,14 @@ body:has(.question-display-tv .global-music-controls.inline) .global-music-contr
 .question-display-tv .oral-buzzer-info .pulse-icon { font-size: 2em; }
 .question-display-tv .waiting-buzz p, .question-display-tv .answering-now p { font-size: 1.2em; margin: 0.2em 0 0; }
 .question-display-tv .participant-picker { max-height: 46vh; overflow: auto; }
+
+/* ---- classic round summary: one wide leaderboard, one scrollbar --------- */
+.question-display-tv.round-recap { overflow-y: auto; }
+.question-display-tv .round-recap-content {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: auto; min-height: 100%; padding: 1.5em 1em; box-sizing: border-box;
+}
+.question-display-tv .recap-title { text-shadow: none; }
+.question-display-tv .recap-leaderboard { width: min(820px, 92vw); max-width: none; max-height: none; overflow: visible; margin: 0 auto 1.4em; }
+.question-display-tv .recap-leaderboard .gm-board.large { width: 100%; max-height: 60vh; display: flex; flex-direction: column; }
+.question-display-tv .recap-leaderboard .gm-board-list { min-height: 0; overflow-y: auto; }

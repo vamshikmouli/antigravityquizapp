@@ -127,3 +127,36 @@ test('generateInBatches: drops repeats, stops when nothing new, keeps partial re
   // Questions passed in "avoid" are not returned again.
   assert.deepEqual((await generateInBatches({ total: 2, avoid: ['Old'], ask: async () => [{ text: 'old' }, { text: 'New' }] })).map((q) => q.text), ['New']);
 });
+
+test('parsePlan: group competition setup per round', async () => {
+  const plan = parsePlan(JSON.stringify({ rounds: [
+    { name: 'General', type: 'MCQ', count: 25 },
+    { name: 'Visual', type: 'oral', count: 10, eliminate: 1 },
+    { name: 'Rapid fire', type: 'oral', count: 8, eliminate: '1 group' },
+    { name: 'Buzzer', type: 'oral buzzer', count: 6, eliminate: 1 },
+    { name: 'Clue round', type: 'clue', count: 2 }
+  ] }), { prompt: '5-round group quiz' });
+  assert.equal(plan.groupMode, true);
+  assert.deepEqual(plan.rounds.map((r) => [r.type, r.format, r.passOnWrong, r.eliminate]), [
+    ['MULTIPLE_CHOICE', 'DIRECTED', true, 0],
+    ['ORAL_OPEN', 'DIRECTED', true, 1],
+    ['ORAL_OPEN', 'DIRECTED', false, 1], // rapid fire: no pass by default
+    ['ORAL_BUZZER', 'BUZZER', false, 1],
+    ['CLUE', 'CLUE', false, 0]
+  ]);
+  assert.equal(plan.rounds[4].points, 30); // clue default: 30 at the first clue
+  // Not a group quiz unless asked; an explicit format from the model is kept.
+  const solo = parsePlan(JSON.stringify({ rounds: [{ type: 'MCQ', format: 'ALL' }] }), { prompt: 'science quiz for class 8' });
+  assert.equal(solo.groupMode, false);
+  assert.equal(solo.rounds[0].format, 'ALL');
+});
+
+test('AI clue questions: 3 clues cleaned, points 30/20/10', async () => {
+  const { parseGeneratedQuestions } = await import('../controllers/aiQuestions.js');
+  const raw = JSON.stringify({ questions: [{ text: '', clues: ['Clue 1: In Shivamogga district', ': Formed by the Sharavathi', '3) A high plunge waterfall'], correctAnswer: 'Jog Falls' }] });
+  const [q] = applyRoundSettings(parseGeneratedQuestions(raw, { type: 'CLUE', count: 1 }), { points: 30, negativePoints: 5 });
+  assert.deepEqual([q.type, q.text, q.correctAnswer], ['CLUE', 'Who am I?', 'Jog Falls']);
+  assert.deepEqual(q.clues, ['In Shivamogga district', 'Formed by the Sharavathi', 'A high plunge waterfall']);
+  assert.deepEqual(q.cluePoints, [30, 20, 10]);
+  assert.equal(q.negativePoints, 5);
+});

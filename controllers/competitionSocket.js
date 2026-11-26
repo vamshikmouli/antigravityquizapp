@@ -185,11 +185,24 @@ export function createCompetition({ io, prisma, getBuzzerManager, startBuzzerRou
       c.state.clear();
       c.currentRevealed = false;
       questionData.mode = c.mode;
-      if (c.mode !== 'TEAMS') return { buzzer: null };
       const cfg = cfgFor(c, question.round);
-      questionData.format = cfg.format;
-      questionData.roundName = cfg.name;
-      questionData.category = question.category || null;
+      // A clue question always goes clue by clue (any mode, any round format):
+      // showing every clue at once would give the answer away.
+      const isClue = question.type === 'CLUE';
+      if (c.mode === 'TEAMS') {
+        questionData.format = isClue ? FORMATS.CLUE : cfg.format;
+        questionData.roundName = cfg.name;
+        questionData.category = question.category || null;
+      }
+      if (isClue) {
+        const clue = c.state.startClue(question, cfg);
+        questionData.clues = (question.clues || []).slice(0, 1);
+        questionData.cluesTotal = clue.total;
+        questionData.cluePoints = (question.clues || []).map((_, i) => cluePointsFor(question, i + 1));
+        questionData.pointsNow = cluePointsFor(question, 1);
+        return { buzzer: true };
+      }
+      if (c.mode !== 'TEAMS') return { buzzer: null };
 
       if (cfg.format === FORMATS.DIRECTED) {
         const groups = (await prisma.participant.findMany({ where: { sessionId, eliminatedAt: null }, orderBy: { joinedAt: 'asc' }, select: { id: true, name: true } }));
@@ -202,14 +215,6 @@ export function createCompetition({ io, prisma, getBuzzerManager, startBuzzerRou
           startTurnTimer(c, sessionId, sessionCode, question, (question.timeLimit || 30) + (question.readingTime || 0));
         }
         return { buzzer: false };
-      }
-      if (cfg.format === FORMATS.CLUE) {
-        const clue = c.state.startClue(question, cfg);
-        questionData.clues = (question.clues || []).slice(0, 1);
-        questionData.cluesTotal = clue.total;
-        questionData.cluePoints = (question.clues || []).map((_, i) => cluePointsFor(question, i + 1));
-        questionData.pointsNow = cluePointsFor(question, 1);
-        return { buzzer: true };
       }
       return { buzzer: null }; // BUZZER / ALL: default behaviour
     },
@@ -258,21 +263,21 @@ export function createCompetition({ io, prisma, getBuzzerManager, startBuzzerRou
 
     isClueInPlay(sessionId) {
       const c = sessions.get(sessionId);
-      return Boolean(c && c.mode === 'TEAMS' && c.state.current?.format === FORMATS.CLUE && !c.state.current.done);
+      return Boolean(c && c.state.current?.format === FORMATS.CLUE && !c.state.current.done);
     },
 
     /** Sync version for the buzzer hot path (uses already-loaded state). */
     isBuzzBlockedSync(sessionId, participantId, socket) {
       if (socket?.data?.eliminated) return true;
       const c = sessions.get(sessionId);
-      return Boolean(c && c.mode === 'TEAMS' && c.state.isLockedOut(participantId));
+      return Boolean(c && c.state.isLockedOut(participantId)); // only clue questions lock anyone out
     },
 
     /** Eliminated or locked-out groups cannot buzz. */
     async isBuzzBlocked(sessionId, participantId, socket) {
       if (socket?.data?.eliminated) return true;
       const c = await load(sessionId);
-      return c.mode === 'TEAMS' && c.state.isLockedOut(participantId);
+      return c.state.isLockedOut(participantId);
     },
 
     /** Extra payload for ROUND_ENDED: round scores, toppers, elimination. */
