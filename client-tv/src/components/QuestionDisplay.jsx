@@ -439,7 +439,9 @@ function QuestionDisplay({ socket, sessionData, userRole, audioManager, initialG
               <span className="round-badge-tv">{currentQuestion.roundName || `Round ${currentQuestion.round}`}</span>
               {currentQuestion.format && !sameTag(formatLabel(currentQuestion.format), currentQuestion.roundName) && <span className="tm-chip">{formatLabel(currentQuestion.format)}</span>}
               {currentQuestion.roundPlan?.groups > 0 && (
-                <span className="tm-chip soft" title={currentQuestion.roundPlan.playing < currentQuestion.roundPlan.total
+                <span className="tm-chip soft" title={currentQuestion.roundPlan.bySubject
+                  ? `${currentQuestion.roundPlan.groups} groups: each group gets one question from each of the ${currentQuestion.roundPlan.subjects} subjects${currentQuestion.roundPlan.playing < currentQuestion.roundPlan.total ? ` (${currentQuestion.roundPlan.playing} of ${currentQuestion.roundPlan.total} questions played)` : ''}`
+                  : currentQuestion.roundPlan.playing < currentQuestion.roundPlan.total
                   ? `${currentQuestion.roundPlan.groups} groups: ${currentQuestion.roundPlan.playing} of ${currentQuestion.roundPlan.total} questions are played so every group gets the same number`
                   : `${currentQuestion.roundPlan.groups} groups`}>
                   {currentQuestion.roundPlan.perGroup} each

@@ -83,6 +83,36 @@ export function playableCount(total, groups) {
 }
 
 /**
+ * Which questions of a DIRECTED round are played, given the group count.
+ * `questions` are the round's questions in play order: [{ id, category }].
+ *
+ * - Subject round (every question has a subject and there are 2+ subjects):
+ *   each group gets ONE question from every subject — the first `groups`
+ *   questions of each subject are played, the rest skipped. With 5 groups and
+ *   5 questions per subject everything is played.
+ * - Otherwise: equal turns (see playableCount); leftovers at the end skipped.
+ */
+export function planDirectedRound(questions = [], groups = 0) {
+  const g = Math.max(0, int(groups, 0));
+  const key = (q) => String(q?.category ?? '').trim().toLowerCase();
+  const subjects = [...new Set(questions.map(key))];
+  const bySubject = questions.length > 0 && subjects.length >= 2 && subjects.every(Boolean);
+  const ids = new Set();
+  if (bySubject) {
+    const used = new Map();
+    for (const q of questions) {
+      const n = used.get(key(q)) || 0;
+      if (!g || n < g) ids.add(q.id);
+      used.set(key(q), n + 1);
+    }
+  } else {
+    for (const q of questions.slice(0, playableCount(questions.length, g))) ids.add(q.id);
+  }
+  const perGroup = bySubject ? subjects.length : (g ? Math.floor(ids.size / g) : ids.size);
+  return { ids, bySubject, subjects: bySubject ? subjects.length : 0, playing: ids.size, total: questions.length, perGroup };
+}
+
+/**
  * Groups a round may eliminate, given how many are still in. Quiz formats are
  * often planned for more groups than actually join, so elimination never
  * leaves fewer than `minLeft` groups playing.
